@@ -1,0 +1,20 @@
+<%- include('../partials/header') %>
+<%- include('nav') %>
+<form method="get" class="filters"><label>Month <input type="month" name="m" value="<%= month.slice(0, 7) %>"></label>
+  <button class="btn secondary">Show</button></form>
+<p class="muted small">Outcomes first (sales, conversion, follow-up discipline); activity counts are shown for context only, never as productivity on their own.</p>
+<div class="card">
+<% if (!rows.length) { %><div class="empty">No activity recorded for this month.</div><% } else { %>
+<div class="table-wrap"><table>
+  <thead><tr><th>Staff</th><th class="hide-sm">Branch</th><th class="num">Sales ₹</th><th class="num">Target ₹</th><th>Achieved</th><th class="num">Leads</th><th class="num">Won (cohort)</th><th class="num">Conv.</th><th class="num">FU due</th><th class="num">FU on time</th><th class="num">Overdue</th><th class="num">Visits</th><th class="num">Activities</th><th class="num">Reached</th></tr></thead>
+  <tbody><% rows.forEach(r => { %><tr>
+    <td><%= r.employee_name %></td><td class="hide-sm"><%= r.branch_id ? L.branch[r.branch_id]?.name : 'Head Office' %></td>
+    <td class="num"><%= fmtMoney(r.sales_value) %></td><td class="num"><%= fmtMoney(r.target_sales_value) %></td>
+    <td><% if (r.target_sales_value) { %><progress max="100" value="<%= Math.min(100, r.sales_value_achievement_pct || 0) %>"></progress><div class="small"><%= fmtPct(r.sales_value_achievement_pct) %></div><% } else { %><span class="muted small">no target</span><% } %></td>
+    <td class="num"><%= r.leads_assigned %></td><td class="num"><%= r.cohort_won %></td><td class="num"><%= fmtPct(r.lead_conversion_pct) %></td>
+    <td class="num"><%= r.followups_due %></td><td class="num"><%= fmtPct(r.followup_on_time_pct) %></td>
+    <td class="num"><%= r.followups_overdue ? r.followups_overdue : 0 %></td><td class="num"><%= r.visits_attended %></td>
+    <td class="num muted"><%= r.activities_completed %></td><td class="num muted"><%= r.leads_reached %></td></tr><% }) %></tbody>
+</table></div><% } %>
+</div>
+<%- include('../partials/footer') %>

@@ -1,0 +1,56 @@
+<%- include('../partials/header') %>
+<h1>New lead</h1>
+<div class="card">
+  <form method="get" action="/leads/new" class="actions">
+    <label>Customer mobile <input name="mobile" value="<%= mobile || '' %>" inputmode="tel" placeholder="10-digit mobile" required></label>
+    <button class="btn secondary">Look up</button>
+  </form>
+  <p class="small muted">Always look up the mobile first so the same customer is never entered twice.</p>
+</div>
+<% if (mobile) { %>
+<div class="card">
+  <% if (customer) { %>
+    <div class="flash ok">Existing customer: <strong><%= customer.customer_name || 'No name on record' %></strong>. The lead will be added to their history.</div>
+  <% } else { %>
+    <div class="flash warn">New customer. Add their name below.</div>
+  <% } %>
+  <form method="post" action="/leads" class="stack">
+    <%- include('../partials/csrf') %>
+    <input type="hidden" name="mobile" value="<%= mobile %>">
+    <div class="fields">
+      <% if (!customer) { %>
+      <label>Customer name <input name="customer_name" autocomplete="off"></label>
+      <label>Area / locality <input name="area"></label>
+      <% } %>
+      <% if (me.data_scope === 'ALL') { %>
+      <label>Branch <select name="branch_id" required><option value="">Choose</option>
+        <% L.branches.filter(b => b.is_active).forEach(b => { %><option value="<%= b.branch_id %>"><%= b.name %></option><% }) %>
+      </select></label>
+      <% } %>
+      <% if (me.data_scope !== 'OWN') { %>
+      <label>Assign to <select name="assigned_to">
+        <option value="<%= me.employee_id %>">Me</option>
+        <% L.employees.filter(e => e.is_active && e.employee_id !== me.employee_id && (me.data_scope === 'ALL' || e.branch_id === me.branch_id)).forEach(e => { %><option value="<%= e.employee_id %>"><%= e.employee_name %></option><% }) %>
+      </select></label>
+      <% } %>
+      <label>Source <select name="source_code" required><option value="">Choose</option>
+        <% L.sources.filter(s => s.is_active).forEach(s => { %><option value="<%= s.source_code %>"><%= s.source_name %></option><% }) %>
+      </select></label>
+      <label>Campaign (if from an ad or promotion) <select name="campaign_id"><option value="">None</option>
+        <% L.campaigns.filter(c => !c.end_date || c.end_date >= todayIST()).forEach(c => { %><option value="<%= c.campaign_id %>"><%= c.campaign_name %></option><% }) %>
+      </select></label>
+      <label>Product category <select name="product_category"><option value="">Not known yet</option>
+        <% L.active('PRODUCT_CATEGORY').forEach(v => { %><option value="<%= v.code %>"><%= v.label %></option><% }) %>
+      </select></label>
+      <label>Model / requirement <input name="product_interest" placeholder="e.g. Galaxy S-series, 256 GB"></label>
+      <label>Budget (₹) <input name="budget_value" type="number" min="0" step="1"></label>
+      <label>Expected purchase date <input name="expected_purchase_on" type="date"></label>
+      <label>First follow-up <input name="first_followup_at" type="datetime-local"></label>
+      <label>Follow-up by <select name="followup_type"><% L.active('ACTIVITY_TYPE').forEach(v => { %><option value="<%= v.code %>"><%= v.label %></option><% }) %></select></label>
+    </div>
+    <label>Notes <textarea name="notes"></textarea></label>
+    <div><button class="btn">Create lead</button></div>
+  </form>
+</div>
+<% } %>
+<%- include('../partials/footer') %>

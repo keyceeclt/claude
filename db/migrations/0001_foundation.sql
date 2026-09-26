@@ -391,7 +391,7 @@ begin
             using errcode = 'check_violation';
     end if;
     if s.is_lost and new.lost_reason is null then
-        raise exception 'Lead % needs a lost_reason', new.lead_id
+        raise exception 'Choose a lost reason to close lead % as lost', new.lead_id
             using errcode = 'check_violation';
     end if;
     if not s.is_lost then

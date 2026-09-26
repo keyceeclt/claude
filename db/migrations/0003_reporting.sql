@@ -84,7 +84,10 @@ select
     end as followup_status
 from crm.lead_activity a
 join crm.lead l on l.lead_id = a.lead_id
-where a.due_at is not null;
+join crm.lead_stage s on s.code = l.stage_code
+-- A follow-up still pending when its lead closed is no longer owed.
+where a.due_at is not null
+  and (a.completed_at is not null or not s.is_closed);
 
 -- -----------------------------------------------------------------------------
 -- Daily MIS: one row per branch per day

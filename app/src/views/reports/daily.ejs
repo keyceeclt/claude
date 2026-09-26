@@ -1,0 +1,42 @@
+<%- include('../partials/header') %>
+<%- include('nav') %>
+<form method="get" class="filters"><label>Date <input type="date" name="date" value="<%= date %>"></label><button class="btn secondary">Show</button></form>
+<% const sum = (k) => rows.reduce((a, r) => a + Number(r[k] || 0), 0);
+   const cols = [
+     ['new_leads','New leads'],['junk_leads','Junk leads'],['leads_reached','Leads reached'],
+     ['followups_due','Follow-ups due'],['followups_on_time','Done on time'],['followups_late','Done late'],['followups_still_overdue','Still overdue'],
+     ['store_visits','Store visits'],['walk_in_visits','of which walk-ins'],['quotations','Quotations'],
+     ['sales_count','Invoices'],['sales_value','Sales ₹'],['lead_sales_value','From leads ₹'],['walk_in_sales_value','Walk-in ₹'],['leads_lost','Leads lost']];
+   const money = ['sales_value','lead_sales_value','walk_in_sales_value']; %>
+<div class="tiles">
+  <div class="tile"><div class="k">Sales</div><div class="v"><%= fmtMoney(sum('sales_value')) %></div><div class="small muted"><%= sum('sales_count') %> invoices</div></div>
+  <div class="tile"><div class="k">New leads</div><div class="v"><%= sum('new_leads') %></div></div>
+  <div class="tile"><div class="k">Leads reached</div><div class="v"><%= sum('leads_reached') %></div></div>
+  <div class="tile <%= sum('followups_due') && sum('followups_on_time') / sum('followups_due') < 0.8 ? 'warn' : '' %>"><div class="k">Follow-ups on time</div><div class="v"><%= fmtPct(sum('followups_due') ? 100 * sum('followups_on_time') / sum('followups_due') : null) %></div><div class="small muted"><%= sum('followups_on_time') %> of <%= sum('followups_due') %></div></div>
+  <div class="tile"><div class="k">Store visits</div><div class="v"><%= sum('store_visits') %></div></div>
+</div>
+<div class="card"><h2>By branch · <%= fmtDate(date) %></h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Measure</th><% rows.forEach(r => { %><th class="num"><%= r.branch_name %></th><% }) %><th class="num">Total</th></tr></thead>
+  <tbody><% cols.forEach(([k, t]) => { %><tr><td><%= t %></td>
+    <% rows.forEach(r => { %><td class="num"><%= money.includes(k) ? fmtMoney(r[k]) : fmtNum(r[k]) %></td><% }) %>
+    <td class="num"><strong><%= money.includes(k) ? fmtMoney(sum(k)) : fmtNum(sum(k)) %></strong></td></tr><% }) %>
+    <tr><td>Follow-up on-time %</td><% rows.forEach(r => { %><td class="num"><%= fmtPct(r.followup_on_time_pct) %></td><% }) %><td></td></tr>
+  </tbody></table></div>
+<p class="small muted">Follow-up figures are for follow-ups <em>due</em> on this date. "Still overdue" were not done at all.</p>
+</div>
+<div class="grid grid-2">
+<div class="card"><h2>Last 7 days</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Date</th><th class="num">New leads</th><th class="num">Reached</th><th class="num">FU on time</th><th class="num">Sales</th><th class="num">From leads</th></tr></thead>
+  <tbody><% week.forEach(w => { %><tr><td class="nowrap"><%= fmtDate(w.mis_date) %></td><td class="num"><%= w.new_leads %></td><td class="num"><%= w.leads_reached %></td>
+    <td class="num"><%= w.followups_on_time %>/<%= w.followups_due %></td><td class="num"><%= fmtMoney(w.sales_value) %></td><td class="num"><%= fmtMoney(w.lead_sales_value) %></td></tr><% }) %></tbody>
+</table></div></div>
+<div class="card"><h2>Open leads needing action now</h2>
+<% if (!attentionRows.length) { %><div class="empty">None.</div><% } else { %>
+<table><thead><tr><th>Branch</th><th>Reason</th><th class="num">Leads</th></tr></thead><tbody>
+<% attentionRows.forEach(a => { %><tr><td><%= L.branch[a.branch_id]?.name %></td><td><%- include('../partials/attention', { code: a.attention_reason }) %></td>
+  <td class="num"><a href="/leads?attention=<%= a.attention_reason %>&branch=<%= a.branch_id %>"><%= a.n %></a></td></tr><% }) %>
+</tbody></table><% } %>
+</div></div>
+<%- include('../partials/footer') %>

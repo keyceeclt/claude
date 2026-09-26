@@ -1,0 +1,14 @@
+<%- include('partials/header') %>
+<div class="login card">
+  <div class="brand-lg">Key Cee Associates</div>
+  <p class="muted">Central CRM &amp; Business Intelligence</p>
+  <% if (error) { %><div class="flash bad"><%= error %></div><% } %>
+  <form method="post" action="/login" class="stack">
+    <input type="hidden" name="next" value="<%= next %>">
+    <label>Email <input type="email" name="email" value="<%= email %>" autocomplete="username" required autofocus></label>
+    <label>Password <input type="password" name="password" autocomplete="current-password" required></label>
+    <button class="btn">Sign in</button>
+  </form>
+  <p class="muted small">Forgot your password? Ask Head Office to reset it.</p>
+</div>
+<%- include('partials/footer') %>

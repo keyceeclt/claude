@@ -1,0 +1,39 @@
+<%- include('../partials/header') %>
+<h1>Campaigns</h1>
+<p class="muted small">Judge a campaign by won leads and revenue per rupee, not by lead count. Revenue counts only sales linked to the campaign's leads.</p>
+<div class="card">
+<% if (!rows.length) { %><div class="empty">No campaigns yet.</div><% } else { %>
+<div class="table-wrap"><table>
+  <thead><tr><th>Campaign</th><th class="hide-sm">Period</th><th class="num">Spend</th><th class="num">Leads</th><th class="num">Qualified</th><th class="num">Won</th><th class="num">Conv.</th><th class="num">Revenue</th><th class="num">Cost / won</th><th class="num">₹ per ₹ spent</th><% if (me.can_manage_config) { %><th></th><% } %></tr></thead>
+  <tbody><% rows.forEach(c => { %><tr>
+    <td><strong><%= c.campaign_name %></strong><div class="small muted"><%= L.source[c.source_code]?.source_name || c.source_code %> · <%= c.branch_id ? L.branch[c.branch_id]?.name : 'All branches' %></div></td>
+    <td class="hide-sm nowrap"><%= fmtDate(c.start_date) %> – <%= fmtDate(c.end_date) %></td>
+    <td class="num"><%= fmtMoney(c.actual_spend) %></td><td class="num"><%= c.leads %></td><td class="num"><%= c.qualified_leads %></td>
+    <td class="num"><%= c.won %></td><td class="num"><%= fmtPct(c.conversion_pct) %></td><td class="num"><%= fmtMoney(c.won_value) %></td>
+    <td class="num"><%= fmtMoney(c.cost_per_won_lead) %></td><td class="num"><%= c.revenue_per_rupee_spent ?? '—' %></td>
+    <% if (me.can_manage_config) { %><td><form method="post" action="/campaigns/<%= c.campaign_id %>/spend" class="actions"><%- include('../partials/csrf') %>
+      <input name="actual_spend" type="number" min="0" step="1" value="<%= c.actual_spend ?? '' %>" aria-label="Actual spend" placeholder="Spend">
+      <button class="btn small secondary">Save</button></form></td><% } %>
+  </tr><% }) %></tbody></table></div>
+<% } %>
+</div>
+<% if (me.can_manage_config) { %>
+<details class="card"><summary>+ New campaign</summary>
+<form method="post" action="/campaigns" class="stack">
+  <%- include('../partials/csrf') %>
+  <div class="fields">
+    <label>Name <input name="campaign_name" required></label>
+    <label>Code (short, unique) <input name="campaign_code"></label>
+    <label>Channel / source <select name="source_code" required><% L.sources.filter(s => s.is_active).forEach(s => { %><option value="<%= s.source_code %>"><%= s.source_name %></option><% }) %></select></label>
+    <label>Branch <select name="branch_id"><option value="">All branches</option><% L.branches.forEach(b => { %><option value="<%= b.branch_id %>"><%= b.name %></option><% }) %></select></label>
+    <label>Start <input type="date" name="start_date" required></label>
+    <label>End <input type="date" name="end_date"></label>
+    <label>Budget (₹) <input type="number" name="budget" min="0"></label>
+    <label>Actual spend (₹) <input type="number" name="actual_spend" min="0"></label>
+  </div>
+  <label>Objective <input name="objective"></label>
+  <div><button class="btn">Create campaign</button></div>
+</form>
+</details>
+<% } %>
+<%- include('../partials/footer') %>

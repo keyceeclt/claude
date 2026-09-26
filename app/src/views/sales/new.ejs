@@ -1,0 +1,39 @@
+<%- include('../partials/header') %>
+<h1>Record sale</h1>
+<div class="card">
+<form method="post" action="/sales" class="stack">
+  <%- include('../partials/csrf') %>
+  <% if (lead) { %>
+    <input type="hidden" name="lead_id" value="<%= lead.lead_id %>">
+    <div class="flash ok">For lead #<%= lead.lead_id %>: <strong><%= lead.customer_name || lead.mobile %></strong>. Saving marks the lead Won.</div>
+  <% } else { %>
+    <p class="small muted">Selling to a customer who came through a lead? Record the sale from the lead page so the revenue is credited to the lead and its campaign.</p>
+  <% } %>
+  <div class="fields">
+    <label>Invoice no. <input name="invoice_no" required></label>
+    <label>Invoice date <input type="date" name="invoice_date" value="<%= todayIST() %>" required></label>
+    <% if (me.data_scope === 'ALL') { %><label>Branch <select name="branch_id" required>
+      <% L.branches.filter(b => b.is_active).forEach(b => { %><option value="<%= b.branch_id %>" <%= lead && lead.branch_id === b.branch_id ? 'selected' : '' %>><%= b.name %></option><% }) %></select></label><% } %>
+    <% if (!lead) { %>
+    <label>Customer mobile (optional) <input name="mobile" inputmode="tel"></label>
+    <label>Customer name <input name="customer_name"></label>
+    <% } %>
+    <label>Sold by <select name="sold_by"><option value="">—</option>
+      <% L.employees.filter(e => e.is_active).forEach(e => { %><option value="<%= e.employee_id %>" <%= lead && lead.assigned_to === e.employee_id ? 'selected' : '' %>><%= e.employee_name %></option><% }) %></select></label>
+    <% if (quotations.length) { %><label>Against quotation <select name="quotation_id"><option value="">None</option>
+      <% quotations.forEach(q => { %><option value="<%= q.quotation_id %>"><%= q.quotation_no || '#' + q.quotation_id %> · <%= fmtMoney(q.total_value) %></option><% }) %></select></label><% } %>
+    <label>Net invoice value (₹) <input type="number" name="net_value" min="0" step="0.01" required></label>
+  </div>
+  <h3>Items (optional)</h3>
+  <% for (let i = 0; i < 3; i++) { %>
+  <div class="fields">
+    <label>Category <select name="item_category"><option value="">—</option><% L.active('PRODUCT_CATEGORY').forEach(v => { %><option value="<%= v.code %>"><%= v.label %></option><% }) %></select></label>
+    <label>Model <input name="item_model"></label>
+    <label>Qty <input type="number" name="item_qty" min="1" value="1"></label>
+    <label>Line value (₹) <input type="number" name="item_value" min="0" step="0.01"></label>
+  </div>
+  <% } %>
+  <div><button class="btn">Save sale</button></div>
+</form>
+</div>
+<%- include('../partials/footer') %>

@@ -1,4 +1,4 @@
-name: Database tests
+name: Tests
 
 on:
   pull_request:
@@ -6,7 +6,7 @@ on:
     branches: [main]
 
 jobs:
-  db-tests:
+  test:
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -18,7 +18,14 @@ jobs:
           --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
-      - name: Run migrations, seed and tests
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+        working-directory: app
+      - name: Database and web app tests
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
-        run: ./scripts/test-db.sh
+        run: ./scripts/test.sh

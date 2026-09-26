@@ -128,13 +128,15 @@ context (market, staff count, footfall). That context is **not yet provided**
 
 | Layer | Choice | Why |
 |---|---|---|
-| Database + login + security | **PostgreSQL on Supabase** (free tier to start, ~US$25/month Pro when live) | Managed backups, built-in login, row-level security per branch, no server to run |
-| Staff / telecaller app | Phase 2: mobile-friendly web app (Next.js) on Supabase | Works on the phones staff already use; no app-store install |
-| MIS dashboards | Phase 2: Looker Studio (free) or Metabase reading the MIS views | Management reports without custom code |
-| Data loads | CSV import from billing and existing lead sheets into staging, validated before load | Keeps bad data out of the core tables |
+| Database | **PostgreSQL 15+** (managed: Supabase, Neon, Render…) | Business rules and branch security enforced in one place; managed backups |
+| Web app | **Node.js + Express, server-rendered pages** (`app/`) | Fast on staff phones, no app install, one small service to host and maintain |
+| Sign-in | Staff email + password (scrypt-hashed), logins issued by Head Office | No per-user licence; access follows the Employee Master; exit date ends access |
+| Security | Each request runs its queries as the signed-in employee (`crm_app` role + row-level security) | A bug in a page cannot show another branch's data |
+| MIS | Built-in report screens on the MIS views; Looker Studio / Metabase can read the same views later | Management reports without extra cost |
+| Data loads | CSV import screen (leads, billing sales) with check-before-save | Bad rows are reported, nothing half-imported |
 
-Everything in this repository is plain PostgreSQL 15+ and runs on any
-Postgres host, so the hosting choice is not locked in.
+Expected running cost to start: roughly US$10–35 a month (small Node service +
+managed Postgres). Everything is standard PostgreSQL and Node, so no lock-in.
 
 ## 9. Gaps — needed from Head Office
 
@@ -157,14 +159,14 @@ Postgres host, so the hosting choice is not locked in.
 
 ## 10. Test and improve
 
-`scripts/test-db.sh` builds a fresh database and runs 47 checks covering the
+`scripts/test.sh` builds a fresh database and runs 47 database checks covering the
 business rules (no Won without a sale, lost needs a reason, duplicate and
 invalid mobiles rejected, visit/sale must match the lead's customer), the KPI
 arithmetic (conversion excludes junk, campaign cost per won lead, walk-in vs
 lead revenue, target achievement), and branch security (manager sees only
-their branch, staff only their leads, exited staff nothing). CI runs it on
-every pull request.
+their branch, staff only their leads, exited staff nothing), then 15
+end-to-end tests that drive the web app like a user. CI runs both on every
+pull request.
 
 Next iteration (after §9 answers): replace placeholders, import a real data
-sample and run the data-quality pass on it, then build the staff app and the
-Daily MIS dashboard.
+sample, run the data-quality pass on it, and pilot at one branch.

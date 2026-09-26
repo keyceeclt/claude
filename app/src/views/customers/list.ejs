@@ -1,0 +1,19 @@
+<%- include('../partials/header') %>
+<h1>Customers</h1>
+<form method="get" class="filters card">
+  <label>Search <input name="q" value="<%= q || '' %>" placeholder="Name or mobile"></label>
+  <button class="btn">Search</button>
+</form>
+<div class="card">
+<% if (!rows.length) { %><div class="empty">No customers found.</div><% } else { %>
+<div class="table-wrap"><table>
+  <thead><tr><th>Customer</th><th>Mobile</th><th class="hide-sm">Area</th><th class="num">Leads</th><th class="num">Purchases</th><th class="hide-sm">Added</th></tr></thead>
+  <tbody><% rows.forEach(c => { %>
+    <tr><td><a href="/customers/<%= c.customer_id %>"><%= c.customer_name || 'No name' %></a></td><td><%= c.mobile %></td>
+      <td class="hide-sm"><%= c.area || '' %></td><td class="num"><%= c.leads %></td><td class="num"><%= fmtMoney(c.sales_value) %></td>
+      <td class="hide-sm"><%= fmtDate(c.created_at) %></td></tr>
+  <% }) %></tbody></table></div>
+<% } %>
+<p class="small muted">Showing up to 100 customers you have access to.</p>
+</div>
+<%- include('../partials/footer') %>

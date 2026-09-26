@@ -1,0 +1,70 @@
+<%- include('../partials/header') %>
+<%- include('nav') %>
+<p class="muted small">Values marked <span class="pill warn">placeholder</span> were set up as starting points and are not confirmed Key Cee values. Edit the label, tick "confirmed" and save. Deactivate values you don't use instead of deleting them, so history stays intact.</p>
+
+<% const row = (table, keys, labelVal, placeholder, active, extra) => { %>
+  <tr><td class="small"><%= Object.values(keys).join(' / ') %></td>
+    <td colspan="2"><form method="post" action="/admin/config/update" class="actions">
+      <%- include('../partials/csrf') %>
+      <input type="hidden" name="table" value="<%= table %>">
+      <% Object.entries(keys).forEach(([k, v]) => { %><input type="hidden" name="<%= k %>" value="<%= v %>"><% }) %>
+      <input name="label" value="<%= labelVal %>" aria-label="Label" required>
+      <label class="inline small"><input type="checkbox" name="confirmed" value="yes" <%= placeholder ? '' : 'checked' %>> confirmed</label>
+      <% if (active !== null) { %><label class="inline small"><input type="checkbox" name="active" value="yes" <%= active ? 'checked' : '' %>> active</label><% } %>
+      <%- extra || '' %>
+      <% if (placeholder) { %><span class="pill warn">placeholder</span><% } %>
+      <button class="btn small secondary">Save</button>
+    </form></td></tr>
+<% } %>
+
+<div class="card"><h2>Rules</h2>
+<table><tbody><% settings.forEach(s => { %><tr><td><strong><%= s.key.replaceAll('_', ' ').toLowerCase() %></strong><div class="small muted"><%= s.description %></div></td>
+  <td><form method="post" action="/admin/config/setting" class="actions"><%- include('../partials/csrf') %>
+    <input type="hidden" name="key" value="<%= s.key %>"><input type="number" name="value" value="<%= s.value %>" min="0" step="1" aria-label="Value"> <%= s.unit %>
+    <% if (s.is_placeholder) { %><span class="pill warn">placeholder</span><% } %>
+    <button class="btn small secondary">Save</button></form></td></tr><% }) %></tbody></table>
+</div>
+
+<div class="card"><h2>Lead stages</h2>
+<p class="small muted">Won is set only by the system when a sale is linked. Junk stages are left out of conversion.</p>
+<table><tbody><% L.stages.forEach(s => row('lead_stage', { code: s.code }, s.label, s.is_placeholder, s.is_active,
+  s.is_won ? '<span class="pill ok">won</span>' : s.is_lost ? '<span class="pill bad">lost</span>' : s.excluded_from_conversion ? '<span class="pill muted">junk</span>' : s.is_closed ? '<span class="pill muted">closed</span>' : '')) %></tbody></table>
+<details><summary class="small">Add a stage</summary>
+<form method="post" action="/admin/config/add" class="actions"><%- include('../partials/csrf') %><input type="hidden" name="table" value="lead_stage">
+  <input name="label" placeholder="Label" required aria-label="Label"><input name="stage_order" type="number" placeholder="Order" aria-label="Order">
+  <select name="kind" aria-label="Kind"><option value="open">Open</option><option value="lost">Closed: lost</option><option value="junk">Closed: junk</option><option value="closed">Closed: other</option></select>
+  <button class="btn small">Add</button></form></details>
+</div>
+
+<div class="card"><h2>Lead sources</h2>
+<table><tbody><% L.sources.forEach(s => row('lead_source', { source_code: s.source_code }, s.source_name, s.is_placeholder, s.is_active, s.is_paid ? '<span class="pill">paid</span>' : '')) %></tbody></table>
+<details><summary class="small">Add a source</summary>
+<form method="post" action="/admin/config/add" class="actions"><%- include('../partials/csrf') %><input type="hidden" name="table" value="lead_source">
+  <input name="label" placeholder="Name" required aria-label="Name"><label class="inline small"><input type="checkbox" name="is_paid" value="yes"> paid</label>
+  <button class="btn small">Add</button></form></details>
+</div>
+
+<div class="card"><h2>Call outcomes</h2>
+<table><tbody><% L.outcomes.forEach(o => row('activity_outcome', { code: o.code }, o.label, o.is_placeholder, o.is_active, o.customer_reached ? '<span class="pill ok">reached</span>' : '<span class="pill muted">not reached</span>')) %></tbody></table>
+<details><summary class="small">Add an outcome</summary>
+<form method="post" action="/admin/config/add" class="actions"><%- include('../partials/csrf') %><input type="hidden" name="table" value="activity_outcome">
+  <input name="label" placeholder="Label" required aria-label="Label"><label class="inline small"><input type="checkbox" name="customer_reached" value="yes"> customer was reached</label>
+  <button class="btn small">Add</button></form></details>
+</div>
+
+<div class="card"><h2>Access levels</h2>
+<p class="small muted">What each level can see is fixed by its scope; only the name can change here.</p>
+<table><tbody><% L.levels.forEach(a => row('access_level', { code: a.code }, a.label, a.is_placeholder, null,
+  '<span class="pill">' + (a.data_scope === 'ALL' ? 'all branches' : a.data_scope === 'BRANCH' ? 'own branch' : 'own leads') + (a.can_write ? '' : ', read-only') + (a.can_manage_config ? ', admin' : '') + '</span>')) %></tbody></table>
+</div>
+
+<% const cats = [...new Set(lookups.map(v => v.category))]; %>
+<% cats.forEach(cat => { %>
+<div class="card"><h2><%= cat.replaceAll('_', ' ').toLowerCase().replace(/^./, c => c.toUpperCase()) %></h2>
+<table><tbody><% lookups.filter(v => v.category === cat).forEach(v => row('lookup_value', { category: v.category, code: v.code }, v.label, v.is_placeholder, v.is_active, '')) %></tbody></table>
+<details><summary class="small">Add a value</summary>
+<form method="post" action="/admin/config/add" class="actions"><%- include('../partials/csrf') %><input type="hidden" name="table" value="lookup_value"><input type="hidden" name="category" value="<%= cat %>">
+  <input name="label" placeholder="Label" required aria-label="Label"><button class="btn small">Add</button></form></details>
+</div>
+<% }) %>
+<%- include('../partials/footer') %>
