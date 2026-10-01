@@ -1,6 +1,6 @@
 // End-to-end tests: real HTTP requests against the app and a real database.
 // Needs DATABASE_URL pointing at a fresh database with db/migrations and
-// db/seed applied (scripts/test-db.sh does this).
+// db/seed applied (scripts/test.sh does this).
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createApp } from '../src/server.js';
@@ -13,6 +13,7 @@ const PASSWORD = 'correct-horse-9';
 
 before(async () => {
     await asSystem(async (db) => {
+        await db.query("select set_config('app.tenant_id', tenant_id::text, true) from crm.tenant where code = 'KEYCEE'");
         await db.query(`insert into crm.employee (employee_id, employee_name, branch_id, status, crm_access_level, login_email, exit_date) values
             ('A-HO',  'Test Admin',     null, 'ACTIVE', 'HO_ADMIN',       'ho@test.kc', null),
             ('A-BM1', 'Test Manager 1', 1,    'ACTIVE', 'BRANCH_MANAGER', 'bm1@test.kc', null),
@@ -20,10 +21,10 @@ before(async () => {
             ('A-S2',  'Test Staff 2',   1,    'ACTIVE', 'STAFF',          's2@test.kc', null),
             ('A-S3',  'Test Staff 3',   3,    'ACTIVE', 'STAFF',          's3@test.kc', null),
             ('A-NEW', 'Test Newcomer',  1,    'ACTIVE', 'STAFF',          'new@test.kc', null),
-            ('A-OLD', 'Test Leaver',    1,    'EXITED', 'STAFF',          'old@test.kc', current_date)`);
+            ('A-OLD', 'Test Leaver',    1,    'EXITED', 'STAFF',          'old@test.kc', current_date - 1)`);
         const hash = hashPassword(PASSWORD);
-        await db.query(`insert into crm.app_login (employee_id, password_hash, must_change_password)
-                        select employee_id, $1, employee_id = 'A-NEW' from crm.employee where employee_id like 'A-%'`, [hash]);
+        await db.query(`select crm.auth_set_password(tenant_id, employee_id, $1, employee_id = 'A-NEW')
+                        from crm.employee where tenant_id = crm.current_tenant_id() and employee_id like 'A-%'`, [hash]);
     });
     server = createApp().listen(0);
     await new Promise((r) => server.once('listening', r));

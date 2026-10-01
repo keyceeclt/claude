@@ -6,7 +6,7 @@
 <div class="card">
 <% if (!rows.length) { %><div class="empty">No activity recorded for this month.</div><% } else { %>
 <div class="table-wrap"><table>
-  <thead><tr><th>Staff</th><th class="hide-sm">Branch</th><th class="num">Sales ₹</th><th class="num">Target ₹</th><th>Achieved</th><th class="num">Leads</th><th class="num">Won (cohort)</th><th class="num">Conv.</th><th class="num">FU due</th><th class="num">FU on time</th><th class="num">Overdue</th><th class="num">Visits</th><th class="num">Activities</th><th class="num">Reached</th></tr></thead>
+  <thead><tr><th>Staff</th><th class="hide-sm">Branch</th><th class="num">Sales <%= currencySymbol %></th><th class="num">Target <%= currencySymbol %></th><th>Achieved</th><th class="num">Leads</th><th class="num">Won (cohort)</th><th class="num">Conv.</th><th class="num">FU due</th><th class="num">FU on time</th><th class="num">Overdue</th><th class="num">Visits</th><th class="num">Activities</th><th class="num">Reached</th></tr></thead>
   <tbody><% rows.forEach(r => { %><tr>
     <td><%= r.employee_name %></td><td class="hide-sm"><%= r.branch_id ? L.branch[r.branch_id]?.name : 'Head Office' %></td>
     <td class="num"><%= fmtMoney(r.sales_value) %></td><td class="num"><%= fmtMoney(r.target_sales_value) %></td>

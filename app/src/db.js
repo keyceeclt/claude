@@ -26,16 +26,28 @@ async function inTransaction(setup, fn) {
     }
 }
 
-// Runs fn as the signed-in employee: row-level security decides what they
-// can see and change, so a page cannot leak another branch's data.
-export function asUser(employeeId, fn) {
+// Runs fn as an employee of a company: row-level security decides what they
+// can see and change, so a page cannot leak another branch's or another
+// company's data. who = { tenant_id, employee_id } (req.user works as is).
+export function asUser(who, fn) {
+    if (!who?.tenant_id || !who?.employee_id) throw new Error('asUser needs tenant_id and employee_id');
     return inTransaction(async (client) => {
         await client.query('set local role crm_app');
-        await client.query("select set_config('app.employee_id', $1, true)", [employeeId]);
+        await client.query(
+            "select set_config('app.tenant_id', $1, true), set_config('app.employee_id', $2, true)",
+            [String(who.tenant_id), who.employee_id]);
     }, fn);
 }
 
-// Server-only work (sign-in, password changes). Never used to serve page data.
+// Sign-in and password changes, through the crm.auth_* functions only
+// (role crm_auth). Never used to serve page data.
+export function asAuth(fn) {
+    return inTransaction(async (client) => {
+        await client.query('set local role crm_auth');
+    }, fn);
+}
+
+// Database owner: migrations and admin command-line tools only.
 export function asSystem(fn) {
     return inTransaction(async () => {}, fn);
 }

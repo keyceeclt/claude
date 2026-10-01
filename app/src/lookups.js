@@ -6,8 +6,8 @@ export async function loadLookups(db) {
         'select * from crm.lead_source order by source_name',
         'select * from crm.activity_outcome order by customer_reached desc, label',
         'select * from crm.branch order by branch_id',
-        `select employee_id, employee_name, branch_id,
-                         (exit_date is null or exit_date > current_date) as is_active
+        `select employee_id, employee_name, branch_id, crm_access_level = 'AI_AGENT' as is_agent,
+                         (exit_date is null or exit_date > crm.local_date(now())) as is_active
                   from crm.employee order by employee_name`,
         `select campaign_id, campaign_name, source_code, branch_id, start_date, end_date
                   from crm.campaign order by start_date desc`,
@@ -36,9 +36,11 @@ export async function loadLookups(db) {
         outcome: byCode(outcomes.rows, 'code'),
         branches: branches.rows,
         branch: byCode(branches.rows, 'branch_id'),
-        employees: employees.rows,
+        // People only: the AI agent is never offered as an owner or manager.
+        employees: employees.rows.filter((e) => !e.is_agent),
         employee: byCode(employees.rows, 'employee_id'),
         campaigns: campaigns.rows,
         levels: levels.rows,
+        assignableLevels: levels.rows.filter((a) => a.code !== 'AI_AGENT'),
     };
 }

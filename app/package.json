@@ -1,8 +1,8 @@
 {
-  "name": "kc-crm-app",
-  "version": "0.2.0",
+  "name": "retail-sales-crm",
+  "version": "0.3.0",
   "private": true,
-  "description": "Key Cee Associates Central CRM & BI web app",
+  "description": "Agentic sales CRM for multi-branch retailers",
   "type": "module",
   "engines": {
     "node": ">=20"
@@ -12,9 +12,12 @@
     "dev": "node --watch src/server.js",
     "create-admin": "node src/cli/create-admin.js",
     "test": "node --test test/*.test.js",
-    "demo": "node src/cli/demo.js"
+    "demo": "node src/cli/demo.js",
+    "create-tenant": "node src/cli/create-tenant.js",
+    "agents": "node src/cli/agents.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
     "ejs": "^6.0.1",
     "express": "^5.2.1",
     "pg": "^8.23.0"

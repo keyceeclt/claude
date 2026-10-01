@@ -10,13 +10,10 @@
 --   * Revenue = sales.net_value. Lead revenue = sales linked to a lead.
 --     Walk-in revenue (no lead) is reported separately, never mixed into ROI.
 --   * Activities are shown next to outcomes, never as productivity by themselves.
---   * Dates are Asia/Kolkata calendar dates.
+--   * Dates are calendar dates in the company's own time zone.
+--   * Views are read through the crm_app role, so they always show one company
+--     (row-level security); joins on codes also match tenant_id.
 -- =============================================================================
-
-create function crm.local_date(ts timestamptz)
-returns date language sql immutable as $$
-    select (ts at time zone 'Asia/Kolkata')::date
-$$;
 
 create function crm.pct(num numeric, den numeric)
 returns numeric language sql immutable as $$
@@ -29,22 +26,22 @@ $$;
 create view crm.v_lead_status with (security_invoker = true) as
 with base as (
     select
-        l.lead_id, l.customer_id, l.branch_id, l.assigned_to, l.source_code, l.campaign_id,
+        l.tenant_id, l.lead_id, l.customer_id, l.branch_id, l.assigned_to, l.source_code, l.campaign_id,
         l.product_category, l.budget_value, l.stage_code,
         s.is_closed, s.is_won, s.is_lost, s.excluded_from_conversion,
         l.created_at, crm.local_date(l.created_at) as created_on,
         l.first_contact_at, l.last_activity_at, l.closed_at,
         round((extract(epoch from (l.first_contact_at - l.created_at)) / 3600.0)::numeric, 1)
             as first_contact_hours,
-        current_date - crm.local_date(l.created_at) as age_days,
-        current_date - crm.local_date(coalesce(l.last_activity_at, l.created_at)) as days_since_activity,
+        crm.local_date(now()) - crm.local_date(l.created_at) as age_days,
+        crm.local_date(now()) - crm.local_date(coalesce(l.last_activity_at, l.created_at)) as days_since_activity,
         fu.pending_followups, fu.overdue_followups, fu.next_followup_at,
         exists (select 1 from crm.store_visit v where v.lead_id = l.lead_id) as has_visit,
         exists (select 1 from crm.quotation q where q.lead_id = l.lead_id) as has_quotation,
         coalesce(sv.won_value, 0) as won_value,
         sv.first_sale_on
     from crm.lead l
-    join crm.lead_stage s on s.code = l.stage_code
+    join crm.lead_stage s on s.tenant_id = l.tenant_id and s.code = l.stage_code
     cross join lateral (
         select count(*) filter (where a.completed_at is null and a.due_at is not null) as pending_followups,
                count(*) filter (where a.completed_at is null and a.due_at < now())      as overdue_followups,
@@ -84,7 +81,7 @@ select
     end as followup_status
 from crm.lead_activity a
 join crm.lead l on l.lead_id = a.lead_id
-join crm.lead_stage s on s.code = l.stage_code
+join crm.lead_stage s on s.tenant_id = l.tenant_id and s.code = l.stage_code
 -- A follow-up still pending when its lead closed is no longer owed.
 where a.due_at is not null
   and (a.completed_at is not null or not s.is_closed);
@@ -105,7 +102,7 @@ acts as (
            count(distinct a.lead_id) filter (where o.customer_reached) as leads_reached
     from crm.lead_activity a
     join crm.lead l on l.lead_id = a.lead_id
-    join crm.activity_outcome o on o.code = a.outcome
+    join crm.activity_outcome o on o.tenant_id = a.tenant_id and o.code = a.outcome
     where a.completed_at is not null group by 1, 2),
 fus as (
     select branch_id, due_on as d,
@@ -133,14 +130,14 @@ sales as (
 lost as (
     select l.branch_id, crm.local_date(h.changed_at) as d, count(distinct h.lead_id) as leads_lost
     from crm.lead_stage_history h
-    join crm.lead_stage s on s.code = h.to_stage and s.is_lost
+    join crm.lead_stage s on s.tenant_id = h.tenant_id and s.code = h.to_stage and s.is_lost
     join crm.lead l on l.lead_id = h.lead_id group by 1, 2),
 spine as (
     select b.branch_id, d::date as d
     from crm.branch b
     cross join generate_series(
         (select least(min(created_on), min(first_sale_on)) from crm.v_lead_status),
-        current_date, interval '1 day') d
+        crm.local_date(now()), interval '1 day') d
     union
     select branch_id, d from sales)
 select
@@ -213,7 +210,7 @@ select
             count(*) filter (where not ls.excluded_from_conversion)) as conversion_pct,
     sum(ls.won_value)                                    as won_value
 from crm.v_lead_status ls
-join crm.lead_source src on src.source_code = ls.source_code
+join crm.lead_source src on src.tenant_id = ls.tenant_id and src.source_code = ls.source_code
 group by 1, 2, 3, 4;
 
 create view crm.v_campaign_performance with (security_invoker = true) as
@@ -260,7 +257,7 @@ with facts as (
     union all
     select a.employee_id, date_trunc('month', crm.local_date(a.completed_at))::date,
            0, 0, 0, 0, 0, 0, 0, 1, o.customer_reached::int, 0, 0, 0, 0
-    from crm.lead_activity a join crm.activity_outcome o on o.code = a.outcome
+    from crm.lead_activity a join crm.activity_outcome o on o.tenant_id = a.tenant_id and o.code = a.outcome
     where a.completed_at is not null
     union all
     select employee_id, date_trunc('month', due_on)::date,
@@ -338,14 +335,14 @@ select 'OPEN_LEAD_UNASSIGNED', 'HIGH', 'lead', l.lead_id::text, l.branch_id, l.s
 from crm.v_lead_status l where not l.is_closed and l.assigned_to is null
 union all
 select 'OPEN_LEAD_OWNER_EXITED', 'HIGH', 'lead', l.lead_id::text, l.branch_id, e.employee_id
-from crm.v_lead_status l join crm.employee e on e.employee_id = l.assigned_to
-where not l.is_closed and e.exit_date <= current_date
+from crm.v_lead_status l join crm.employee e on e.tenant_id = l.tenant_id and e.employee_id = l.assigned_to
+where not l.is_closed and e.exit_date <= crm.local_date(now())
 union all
 select 'LEAD_NO_PRODUCT_CATEGORY', 'LOW', 'lead', l.lead_id::text, l.branch_id, null
 from crm.lead l where l.product_category is null
 union all
 select 'PAID_SOURCE_LEAD_NO_CAMPAIGN', 'MEDIUM', 'lead', l.lead_id::text, l.branch_id, l.source_code
-from crm.lead l join crm.lead_source s on s.source_code = l.source_code
+from crm.lead l join crm.lead_source s on s.tenant_id = l.tenant_id and s.source_code = l.source_code
 where s.is_paid and l.campaign_id is null
 union all
 select 'LEAD_SOURCE_DIFFERS_FROM_CAMPAIGN', 'MEDIUM', 'lead', l.lead_id::text, l.branch_id,
@@ -372,19 +369,19 @@ join (select sale_id, sum(line_value) as items_value from crm.sale_item group by
 where i.items_value <> s.net_value
 union all
 select 'QUOTATION_EXPIRED_STILL_OPEN', 'LOW', 'quotation', q.quotation_id::text, q.branch_id, q.quotation_no
-from crm.quotation q where q.status = 'OPEN' and q.valid_until < current_date
+from crm.quotation q where q.status = 'OPEN' and q.valid_until < crm.local_date(now())
 union all
 select 'ACTIVITY_BEFORE_LEAD_CREATED', 'MEDIUM', 'lead_activity', a.activity_id::text, l.branch_id, null
 from crm.lead_activity a join crm.lead l on l.lead_id = a.lead_id
 where a.completed_at < l.created_at
 union all
 select 'EMPLOYEE_NO_REPORTING_MANAGER', 'LOW', 'employee', e.employee_id, e.branch_id, e.employee_name
-from crm.employee e join crm.access_level a on a.code = e.crm_access_level
+from crm.employee e join crm.access_level a on a.tenant_id = e.tenant_id and a.code = e.crm_access_level
 where e.reporting_manager_id is null and a.data_scope <> 'ALL'
-  and (e.exit_date is null or e.exit_date > current_date)
+  and (e.exit_date is null or e.exit_date > crm.local_date(now()))
 union all
 select 'ENDED_CAMPAIGN_NO_SPEND', 'MEDIUM', 'campaign', c.campaign_id::text, c.branch_id, c.campaign_name
-from crm.campaign c where c.end_date < current_date and c.actual_spend is null;
+from crm.campaign c where c.end_date < crm.local_date(now()) and c.actual_spend is null;
 
 -- -----------------------------------------------------------------------------
 -- Setup gaps: configuration still running on placeholder values

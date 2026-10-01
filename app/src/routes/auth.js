@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { asSystem } from '../db.js';
+import { asAuth } from '../db.js';
 import {
     verifyPassword, hashPassword, passwordProblem, startSession, endSession,
     loginBlocked, recordLoginFailure, clearLoginFailures,
@@ -24,17 +24,15 @@ router.post('/login', async (req, res) => {
     const fail = (error) => res.status(401).render('login', { title: 'Sign in', next, error, email });
 
     if (loginBlocked(key)) return fail('Too many attempts. Wait 15 minutes and try again.');
-    const { rows } = await asSystem((db) => db.query(
-        `select e.employee_id, l.password_hash
-         from crm.employee e join crm.app_login l on l.employee_id = e.employee_id
-         where lower(e.login_email) = $1 and (e.exit_date is null or e.exit_date > current_date)`, [email]));
+    const { rows } = await asAuth((db) => db.query('select * from crm.auth_find_login($1)', [email]));
     if (!rows[0] || !verifyPassword(password, rows[0].password_hash)) {
         recordLoginFailure(key);
         return fail('Email or password is incorrect.');
     }
     clearLoginFailures(key);
-    await asSystem((db) => db.query('update crm.app_login set last_login_at = now() where employee_id = $1', [rows[0].employee_id]));
-    startSession(res, rows[0].employee_id);
+    const { tenant_id: tenantId, employee_id: employeeId } = rows[0];
+    await asAuth((db) => db.query('select crm.auth_record_login($1, $2)', [tenantId, employeeId]));
+    startSession(res, tenantId, employeeId);
     res.redirect(next);
 });
 
@@ -52,14 +50,13 @@ router.post('/account/password', async (req, res) => {
     if (!req.user) return res.redirect('/login');
     const { current, password, confirm } = req.body;
     const render = (error) => res.status(400).render('password', { title: 'Change password', error });
-    const { rows } = await asSystem((db) => db.query('select password_hash from crm.app_login where employee_id = $1', [req.user.employee_id]));
-    if (!rows[0] || !verifyPassword(String(current || ''), rows[0].password_hash)) return render('Current password is incorrect.');
+    const { rows } = await asAuth((db) => db.query('select crm.auth_password_hash($1, $2) as hash', [req.user.tenant_id, req.user.employee_id]));
+    if (!rows[0]?.hash || !verifyPassword(String(current || ''), rows[0].hash)) return render('Current password is incorrect.');
     const problem = passwordProblem(password);
     if (problem) return render(problem);
     if (password !== confirm) return render('The two new passwords do not match.');
-    await asSystem((db) => db.query(
-        'update crm.app_login set password_hash = $2, must_change_password = false, updated_at = now() where employee_id = $1',
-        [req.user.employee_id, hashPassword(password)]));
+    await asAuth((db) => db.query('select crm.auth_set_password($1, $2, $3, false)',
+        [req.user.tenant_id, req.user.employee_id, hashPassword(password)]));
     res.redirect('/?msg=Password changed.');
 });
 

@@ -4,7 +4,7 @@
 <div class="card">
 <% if (!rows.length) { %><div class="empty">No campaigns yet.</div><% } else { %>
 <div class="table-wrap"><table>
-  <thead><tr><th>Campaign</th><th class="hide-sm">Period</th><th class="num">Spend</th><th class="num">Leads</th><th class="num">Qualified</th><th class="num">Won</th><th class="num">Conv.</th><th class="num">Revenue</th><th class="num">Cost / won</th><th class="num">₹ per ₹ spent</th><% if (me.can_manage_config) { %><th></th><% } %></tr></thead>
+  <thead><tr><th>Campaign</th><th class="hide-sm">Period</th><th class="num">Spend</th><th class="num">Leads</th><th class="num">Qualified</th><th class="num">Won</th><th class="num">Conv.</th><th class="num">Revenue</th><th class="num">Cost / won</th><th class="num">Revenue per 1 spent</th><% if (me.can_manage_config) { %><th></th><% } %></tr></thead>
   <tbody><% rows.forEach(c => { %><tr>
     <td><strong><%= c.campaign_name %></strong><div class="small muted"><%= L.source[c.source_code]?.source_name || c.source_code %> · <%= c.branch_id ? L.branch[c.branch_id]?.name : 'All branches' %></div></td>
     <td class="hide-sm nowrap"><%= fmtDate(c.start_date) %> – <%= fmtDate(c.end_date) %></td>
@@ -28,8 +28,8 @@
     <label>Branch <select name="branch_id"><option value="">All branches</option><% L.branches.forEach(b => { %><option value="<%= b.branch_id %>"><%= b.name %></option><% }) %></select></label>
     <label>Start <input type="date" name="start_date" required></label>
     <label>End <input type="date" name="end_date"></label>
-    <label>Budget (₹) <input type="number" name="budget" min="0"></label>
-    <label>Actual spend (₹) <input type="number" name="actual_spend" min="0"></label>
+    <label>Budget (<%= currencySymbol %>) <input type="number" name="budget" min="0"></label>
+    <label>Actual spend (<%= currencySymbol %>) <input type="number" name="actual_spend" min="0"></label>
   </div>
   <label>Objective <input name="objective"></label>
   <div><button class="btn">Create campaign</button></div>

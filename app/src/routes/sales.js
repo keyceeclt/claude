@@ -1,17 +1,16 @@
 import { Router } from 'express';
 import { asUser } from '../db.js';
 import { loadLookups } from '../lookups.js';
-import { act, blank, todayIST } from '../helpers.js';
+import { act, blank, market } from '../helpers.js';
 import { requireScope } from '../auth.js';
-import { istTimestamp } from './leads.js';
 
 const router = Router();
 
 router.get('/sales', async (req, res) => {
-    const from = blank(req.query.from) || `${todayIST().slice(0, 7)}-01`;
-    const to = blank(req.query.to) || todayIST();
+    const from = blank(req.query.from) || `${market(req.user).today().slice(0, 7)}-01`;
+    const to = blank(req.query.to) || market(req.user).today();
     const branch = blank(req.query.branch);
-    const data = await asUser(req.user.employee_id, async (db) => {
+    const data = await asUser(req.user, async (db) => {
         const rows = (await db.query(
             `select s.*, c.customer_name, c.mobile from crm.sale s
              left join crm.customer c on c.customer_id = s.customer_id
@@ -24,7 +23,7 @@ router.get('/sales', async (req, res) => {
 
 router.get('/sales/new', requireScope('ALL', 'BRANCH'), async (req, res) => {
     const leadId = blank(req.query.lead_id);
-    const data = await asUser(req.user.employee_id, async (db) => {
+    const data = await asUser(req.user, async (db) => {
         const lead = leadId ? (await db.query(
             `select l.lead_id, l.branch_id, l.assigned_to, c.customer_name, c.mobile from crm.lead l
              join crm.customer c on c.customer_id = l.customer_id where l.lead_id = $1`, [leadId])).rows[0] : null;
@@ -38,7 +37,7 @@ router.get('/sales/new', requireScope('ALL', 'BRANCH'), async (req, res) => {
 router.post('/sales', requireScope('ALL', 'BRANCH'), async (req, res) => {
     const b = req.body;
     const back = b.lead_id ? `/sales/new?lead_id=${encodeURIComponent(b.lead_id)}` : '/sales/new';
-    await act(res, back, () => asUser(req.user.employee_id, async (db) => {
+    await act(res, back, () => asUser(req.user, async (db) => {
         let customerId = null;
         let branchId = req.user.data_scope === 'ALL' ? blank(b.branch_id) : req.user.branch_id;
         const leadId = blank(b.lead_id);
@@ -79,14 +78,14 @@ router.post('/sales', requireScope('ALL', 'BRANCH'), async (req, res) => {
 });
 
 router.get('/visits/new', async (req, res) => {
-    const L = await asUser(req.user.employee_id, loadLookups);
+    const L = await asUser(req.user, loadLookups);
     res.render('sales/visit', { title: 'Walk-in visit', L });
 });
 
 // A walk-in visit; optionally opens a lead at the same time.
 router.post('/visits', async (req, res) => {
     const b = req.body;
-    await act(res, '/visits/new', () => asUser(req.user.employee_id, async (db) => {
+    await act(res, '/visits/new', () => asUser(req.user, async (db) => {
         const branchId = req.user.data_scope === 'ALL' ? blank(b.branch_id) : req.user.branch_id;
         let customerId = (await db.query('select customer_id from crm.find_customer_by_mobile($1)', [b.mobile])).rows[0]?.customer_id;
         if (!customerId) {
@@ -106,7 +105,7 @@ router.post('/visits', async (req, res) => {
         await db.query(
             `insert into crm.store_visit (customer_id, lead_id, branch_id, visit_at, attended_by, notes)
              values ($1, $2, $3, coalesce($4::timestamptz, now()), $5, $6)`,
-            [customerId, leadId, branchId, istTimestamp(b.visit_at), req.user.employee_id, blank(b.notes)]);
+            [customerId, leadId, branchId, market(req.user).localTimestamp(b.visit_at), req.user.employee_id, blank(b.notes)]);
         return leadId ? `/leads/${leadId}?msg=Visit recorded and lead opened. Schedule the follow-up.` : '/visits/new?msg=Walk-in visit recorded.';
     }));
 });

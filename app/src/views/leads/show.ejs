@@ -104,7 +104,7 @@
       <%- include('../partials/csrf') %>
       <div class="fields">
         <label>Quotation no. <input name="quotation_no"></label>
-        <label>Value (₹) <input name="total_value" type="number" min="0" step="1" required></label>
+        <label>Value (<%= currencySymbol %>) <input name="total_value" type="number" min="0" step="1" required></label>
         <label>Valid until <input name="valid_until" type="date"></label>
       </div>
       <div><button class="btn secondary small">Record quotation</button></div>

@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
-import { asSystem } from './db.js';
+import { asAuth } from './db.js';
+import { market } from './helpers.js';
 
 const SECRET = process.env.SESSION_SECRET || '';
 if (SECRET.length < 32) {
@@ -50,8 +51,8 @@ function cookieFlags() {
     return `; Path=/; HttpOnly; SameSite=Lax${secure}`;
 }
 
-export function startSession(res, employeeId) {
-    const payload = Buffer.from(JSON.stringify({ e: employeeId, x: Date.now() + SESSION_HOURS * 3600e3 }))
+export function startSession(res, tenantId, employeeId) {
+    const payload = Buffer.from(JSON.stringify({ t: tenantId, e: employeeId, x: Date.now() + SESSION_HOURS * 3600e3 }))
         .toString('base64url');
     res.setHeader('Set-Cookie', `${COOKIE}=${payload}.${sign(payload)}${cookieFlags()}; Max-Age=${SESSION_HOURS * 3600}`);
 }
@@ -69,7 +70,7 @@ function readSession(req) {
     if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
     try {
         const data = JSON.parse(Buffer.from(payload, 'base64url').toString());
-        return data.x > Date.now() ? { employeeId: data.e, raw } : null;
+        return data.x > Date.now() && data.t ? { tenantId: data.t, employeeId: data.e, raw } : null;
     } catch {
         return null;
     }
@@ -80,22 +81,15 @@ export async function loadUser(req, res, next) {
     const session = readSession(req);
     req.user = null;
     if (session) {
-        const { rows } = await asSystem((db) => db.query(
-            `select e.employee_id, e.employee_name, e.branch_id, b.name as branch_name,
-                    a.code as access_level, a.label as access_label, a.data_scope,
-                    a.can_write, a.can_manage_config, l.must_change_password
-             from crm.employee e
-             join crm.access_level a on a.code = e.crm_access_level
-             join crm.app_login l on l.employee_id = e.employee_id
-             left join crm.branch b on b.branch_id = e.branch_id
-             where e.employee_id = $1 and (e.exit_date is null or e.exit_date > current_date)`,
-            [session.employeeId]));
+        const { rows } = await asAuth((db) => db.query(
+            'select * from crm.auth_session_user($1, $2)', [session.tenantId, session.employeeId]));
         if (rows[0]) {
             req.user = rows[0];
             req.csrfToken = sign(`csrf:${session.raw}`);
         }
     }
     res.locals.me = req.user;
+    if (req.user) Object.assign(res.locals, market(req.user));
     res.locals.csrfToken = req.csrfToken || '';
     next();
 }
@@ -128,7 +122,7 @@ export function requireScope(...scopes) {
 export function requireConfig(req, res, next) {
     return req.user.can_manage_config
         ? next()
-        : res.status(403).render('error', { title: 'Not allowed', message: 'Only Head Office admins can change this.' });
+        : res.status(403).render('error', { title: 'Not allowed', message: 'Only admins can change this.' });
 }
 
 // Simple in-memory brute-force guard for the login form.

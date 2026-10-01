@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title><%= title %> · KC CRM</title>
+<title><%= title %> · <%= me ? me.tenant_name : appName %></title>
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 <% if (me) { %>
 <header class="topbar"><div class="topbar-inner">
-  <a class="brand" href="/">KC CRM</a>
+  <a class="brand" href="/"><%= me.tenant_name %></a>
   <nav class="nav">
     <% const on = (p) => (p === '/' ? path === '/' : path.startsWith(p)) ? 'on' : ''; %>
     <a class="<%= on('/') %>" href="/">My Day</a>

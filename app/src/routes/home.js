@@ -1,19 +1,19 @@
 import { Router } from 'express';
 import { asUser } from '../db.js';
 import { loadLookups } from '../lookups.js';
-import { todayIST, monthStartIST } from '../helpers.js';
+import { market } from '../helpers.js';
 
 const router = Router();
 
 router.get('/', async (req, res) => {
     const owner = typeof req.query.owner === 'string' && req.query.owner ? req.query.owner : null;
-    const data = await asUser(req.user.employee_id, async (db) => {
+    const data = await asUser(req.user, async (db) => {
         const L = await loadLookups(db);
         const ownerFilter = owner ? 'and assigned_to = $1' : 'and ($1::text is null)';
         const followups = (await db.query(
             `select * from crm.v_my_followups
              where (followup_status = 'OVERDUE' or due_on <= $2::date) ${ownerFilter.replace('assigned_to', 'employee_id')}
-             order by due_at limit 200`, [owner, todayIST()])).rows;
+             order by due_at limit 200`, [owner, market(req.user).today()])).rows;
         const attentionLeads = (await db.query(
             `select ls.lead_id, ls.assigned_to, ls.branch_id, ls.stage_code, ls.product_category, ls.created_at,
                     ls.attention_reason, ls.days_since_activity, c.customer_name, c.mobile
@@ -25,13 +25,13 @@ router.get('/', async (req, res) => {
         const today = (await db.query(
             `select coalesce(sum(new_leads), 0) as new_leads, coalesce(sum(leads_reached), 0) as leads_reached,
                     coalesce(sum(sales_count), 0) as sales_count, coalesce(sum(sales_value), 0) as sales_value
-             from crm.v_daily_mis where mis_date = $1::date`, [todayIST()])).rows[0];
+             from crm.v_daily_mis where mis_date = $1::date`, [market(req.user).today()])).rows[0];
         const month = (await db.query(
             `select coalesce(sum(sales_value), 0) as sales_value, sum(target_sales_value) as target_sales_value,
                     coalesce(sum(cohort_won), 0) as won, coalesce(sum(qualified_leads), 0) as qualified
              from crm.v_staff_performance_monthly where month = $1::date
                and ($2::text is null or employee_id = $2)`,
-            [monthStartIST(), req.user.data_scope === 'OWN' ? req.user.employee_id : owner])).rows[0];
+            [market(req.user).monthStart(), req.user.data_scope === 'OWN' ? req.user.employee_id : owner])).rows[0];
         return { L, followups, attentionLeads, today, month };
     });
     res.render('home', { title: 'My Day', owner, ...data });

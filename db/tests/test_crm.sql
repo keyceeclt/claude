@@ -1,7 +1,7 @@
 -- =============================================================================
 -- Test suite: business rules, KPI calculations, branch security.
 -- Uses TEST fixtures only (names like "Test Staff"); not business data.
--- Any failed assertion raises and stops scripts/test-db.sh.
+-- Any failed assertion raises and stops scripts/test.sh.
 -- =============================================================================
 
 create schema crm_test;
@@ -28,8 +28,21 @@ begin
     raise exception 'FAIL %: statement was accepted', what;
 end $$;
 
+-- Rows a statement changed (row-level security hides rows rather than raising).
+create function crm_test.affected(stmt text)
+returns bigint language plpgsql as $$
+declare n bigint;
+begin
+    execute stmt;
+    get diagnostics n = row_count;
+    return n;
+end $$;
+
 grant execute on all functions in schema crm_test to crm_app;
 set client_min_messages = notice;
+
+-- Everything below acts for the first company (Key Cee) unless it says otherwise.
+select set_config('app.tenant_id', tenant_id::text, false) from crm.tenant where code = 'KEYCEE';
 
 -- -----------------------------------------------------------------------------
 -- Fixtures
@@ -42,7 +55,7 @@ insert into crm.employee (employee_id, employee_name, branch_id, status, crm_acc
     ('T-S2',  'Test Staff HiLITE 2',   1,    'ACTIVE', 'STAFF',          'T-BM1', null),
     ('T-BM3', 'Test Manager Appas',    3,    'ACTIVE', 'BRANCH_MANAGER', 'T-HO', null),
     ('T-S3',  'Test Staff Appas',      3,    'ACTIVE', 'STAFF',          'T-BM3', null),
-    ('T-OLD', 'Test Exited Staff',     1,    'EXITED', 'STAFF',          'T-BM1', current_date - 1);
+    ('T-OLD', 'Test Exited Staff',     1,    'EXITED', 'STAFF',          'T-BM1', crm.local_date(now()) - 1);
 
 insert into crm.customer (customer_name, mobile, home_branch_id, created_by) values
     ('Test Customer A', '+91 98470 00001', 1, 'T-S1'),
@@ -51,7 +64,7 @@ insert into crm.customer (customer_name, mobile, home_branch_id, created_by) val
     (null,              '9847000004',      1, 'T-S1');
 
 insert into crm.campaign (campaign_code, campaign_name, source_code, branch_id, start_date, end_date, actual_spend)
-values ('T-CAMP', 'Test social campaign', 'SOCIAL_ADS', 1, current_date - 30, current_date + 30, 10000);
+values ('T-CAMP', 'Test social campaign', 'SOCIAL_ADS', 1, crm.local_date(now()) - 30, crm.local_date(now()) + 30, 10000);
 
 insert into crm.lead (customer_id, branch_id, assigned_to, source_code, campaign_id, product_category, created_by, created_at)
 values
@@ -99,15 +112,15 @@ select crm_test.raises($$insert into crm.store_visit (customer_id, lead_id, bran
                        'visit customer must match lead');
 insert into crm.store_visit (customer_id, lead_id, branch_id, visit_at, attended_by) values (1, 1, 1, now() - interval '1 day', 'T-S1');
 insert into crm.quotation (quotation_no, customer_id, lead_id, branch_id, prepared_by, quoted_on, valid_until, total_value)
-values ('Q1', 1, 1, 1, 'T-S1', current_date - 1, current_date + 6, 52000);
+values ('Q1', 1, 1, 1, 'T-S1', crm.local_date(now()) - 1, crm.local_date(now()) + 6, 52000);
 
 select crm_test.raises($$insert into crm.sale (invoice_no, branch_id, invoice_date, customer_id, lead_id, net_value)
-                         values ('BAD', 1, current_date, 2, 1, 100)$$, 'sale customer must match lead');
+                         values ('BAD', 1, crm.local_date(now()), 2, 1, 100)$$, 'sale customer must match lead');
 insert into crm.sale (invoice_no, branch_id, invoice_date, customer_id, lead_id, quotation_id, sold_by, net_value)
-values ('INV-1', 1, current_date, 1, 1, 1, 'T-S1', 50000);
+values ('INV-1', 1, crm.local_date(now()), 1, 1, 1, 'T-S1', 50000);
 insert into crm.sale_item (sale_id, line_no, product_category, quantity, line_value) values ((select sale_id from crm.sale where invoice_no = 'INV-1'), 1, 'MOBILE', 1, 50000);
 insert into crm.sale (invoice_no, branch_id, invoice_date, customer_id, lead_id, sold_by, net_value)
-values ('INV-2', 1, current_date, null, null, 'T-S2', 20000);                   -- walk-in counter sale
+values ('INV-2', 1, crm.local_date(now()), null, null, 'T-S2', 20000);                   -- walk-in counter sale
 
 select crm_test.eq((select stage_code from crm.lead where lead_id = 1), 'WON', 'linked sale marks lead won');
 select crm_test.eq((select count(*) from crm.lead_stage_history where lead_id = 1), 2::bigint, 'stage history kept (NEW, WON)');
@@ -125,15 +138,15 @@ select crm_test.eq((select won_value from crm.v_campaign_performance where campa
 select crm_test.eq((select cost_per_won_lead from crm.v_campaign_performance where campaign_code = 'T-CAMP'), 10000.00::numeric, 'cost per won lead');
 select crm_test.eq((select revenue_per_rupee_spent from crm.v_campaign_performance where campaign_code = 'T-CAMP'), 5.00::numeric, 'revenue per rupee spent');
 
-select crm_test.eq((select sales_value from crm.v_daily_mis where branch_id = 1 and mis_date = current_date), 70000::numeric, 'daily MIS total sales');
-select crm_test.eq((select walk_in_sales_value from crm.v_daily_mis where branch_id = 1 and mis_date = current_date), 20000::numeric, 'daily MIS walk-in sales separated');
-select crm_test.eq((select lead_sales_value from crm.v_daily_mis where branch_id = 1 and mis_date = current_date), 50000::numeric, 'daily MIS lead sales');
+select crm_test.eq((select sales_value from crm.v_daily_mis where branch_id = 1 and mis_date = crm.local_date(now())), 70000::numeric, 'daily MIS total sales');
+select crm_test.eq((select walk_in_sales_value from crm.v_daily_mis where branch_id = 1 and mis_date = crm.local_date(now())), 20000::numeric, 'daily MIS walk-in sales separated');
+select crm_test.eq((select lead_sales_value from crm.v_daily_mis where branch_id = 1 and mis_date = crm.local_date(now())), 50000::numeric, 'daily MIS lead sales');
 
 insert into crm.staff_target (employee_id, period_type, period_start, period_end, target_type, target_value)
-values ('T-S1', 'MONTH', date_trunc('month', current_date)::date,
-        (date_trunc('month', current_date) + interval '1 month - 1 day')::date, 'SALES_VALUE', 200000);
+values ('T-S1', 'MONTH', date_trunc('month', crm.local_date(now()))::date,
+        (date_trunc('month', crm.local_date(now())) + interval '1 month - 1 day')::date, 'SALES_VALUE', 200000);
 select crm_test.eq((select sales_value_achievement_pct from crm.v_staff_performance_monthly
-                    where employee_id = 'T-S1' and month = date_trunc('month', current_date)::date), 25.0, 'staff target achievement');
+                    where employee_id = 'T-S1' and month = date_trunc('month', crm.local_date(now()))::date), 25.0, 'staff target achievement');
 
 select crm_test.eq((select count(*) from crm.v_data_quality_issues where issue_code = 'OPEN_LEAD_OWNER_EXITED'), 1::bigint, 'DQ: lead owned by exited staff');
 select crm_test.eq((select count(*) from crm.v_data_quality_issues where issue_code = 'CUSTOMER_NAME_MISSING'), 1::bigint, 'DQ: customer name missing');
@@ -176,6 +189,85 @@ select crm_test.eq((select count(*) from crm.lead), 0::bigint, 'exited staff see
 
 reset app.employee_id;
 select crm_test.eq((select count(*) from crm.lead), 0::bigint, 'unknown user sees nothing');
+
+-- -----------------------------------------------------------------------------
+-- AI agents: suggest, never decide
+-- -----------------------------------------------------------------------------
+set app.employee_id = 'AI-AGENT';
+select crm_test.eq((select count(*) from crm.lead), 5::bigint, 'agent reads all leads of its company');
+select crm_test.eq(crm_test.affected($$update crm.lead set stage_code = 'LOST', lost_reason = 'PRICE' where lead_id = 2$$),
+                   0::bigint, 'agent cannot change a lead');
+select crm_test.raises($$insert into crm.customer (mobile) values ('9847000055')$$, 'agent cannot create customers');
+select crm_test.raises($$insert into crm.sale (invoice_no, branch_id, invoice_date, net_value) values ('AI-1', 1, now()::date, 1)$$,
+                       'agent cannot record sales');
+insert into crm.agent_run (agent, branch_id, status) values ('LEAD_RESCUE', 1, 'RUNNING');
+insert into crm.lead_activity (lead_id, employee_id, activity_type, due_at, notes, origin, agent_run_id)
+values (2, 'T-S2', 'CALL', now() + interval '2 hours', 'Agent: customer asked for a call back', 'AGENT', 1);
+insert into crm.agent_suggestion (run_id, kind, lead_id, branch_id, assigned_to, activity_type, suggested_due_at, reason, status, activity_id)
+values (1, 'FOLLOWUP', 2, 1, 'T-S2', 'CALL', now() + interval '2 hours', 'Follow-up overdue by 2 days', 'APPLIED',
+        (select max(activity_id) from crm.lead_activity where origin = 'AGENT'));
+insert into crm.agent_suggestion (run_id, kind, lead_id, branch_id, assigned_to, activity_type, suggested_due_at, reason)
+values (1, 'FOLLOWUP', 1, 1, 'T-S1', 'WHATSAPP', now() + interval '1 day', 'No next follow-up after quotation');
+update crm.agent_run set status = 'DONE', cost_usd = 0.25, items = 2, finished_at = now() where run_id = 1;
+select crm_test.raises($$insert into crm.lead_activity (lead_id, employee_id, activity_type, completed_at, outcome, origin, agent_run_id)
+                         values (2, 'T-S2', 'CALL', now(), 'CONNECTED_INTERESTED', 'AGENT', 1)$$, 'agent cannot log a completed contact');
+select crm_test.raises($$insert into crm.lead_activity (lead_id, employee_id, activity_type, due_at)
+                         values (2, 'T-S2', 'CALL', now())$$, 'agent work is always marked as the agent''s');
+select crm_test.eq(crm.ai_spend_this_month(), 0.25::numeric, 'AI spend this month');
+
+set app.employee_id = 'T-S1';
+select crm_test.raises($$insert into crm.lead_activity (lead_id, employee_id, activity_type, due_at, origin, agent_run_id)
+                         values (1, 'T-S1', 'CALL', now(), 'AGENT', 1)$$, 'staff cannot pass work off as the agent''s');
+select crm_test.eq((select count(*) from crm.agent_suggestion), 1::bigint, 'staff sees only suggestions for them');
+select crm_test.raises($$select crm.undo_agent_followup(1)$$, 'staff cannot undo a colleague''s agent follow-up');
+select crm_test.eq(crm_test.affected($$delete from crm.lead_activity where lead_id = 1$$), 0::bigint,
+                   'staff cannot delete their own activity history');
+
+set app.employee_id = 'T-S2';
+select crm.undo_agent_followup(1);
+select crm_test.eq((select status from crm.agent_suggestion where suggestion_id = 1), 'UNDONE', 'agent follow-up undone');
+select crm_test.eq((select count(*) from crm.lead_activity where origin = 'AGENT'), 0::bigint, 'undone follow-up removed');
+
+set app.employee_id = 'T-BM3';
+select crm_test.eq((select count(*) from crm.agent_suggestion), 0::bigint, 'other branch manager sees no HiLITE suggestions');
+reset role;
+select crm_test.raises($$select crm.auth_set_password(crm.current_tenant_id(), 'AI-AGENT', 'x', false)$$, 'agent account cannot sign in');
+
+-- -----------------------------------------------------------------------------
+-- Company isolation: a second company on the same database
+-- -----------------------------------------------------------------------------
+select tenant_id as keycee_id from crm.tenant where code = 'KEYCEE' \gset
+select crm.create_tenant('OTHER', 'Other Retail LLC', 'GENERAL', 'AE', '971', '^5[0-9]{8}$', 'Asia/Dubai', 'AED', 'en-AE');
+select set_config('app.tenant_id', tenant_id::text, false) from crm.tenant where code = 'OTHER';
+insert into crm.branch (code, name, city) values ('MAIN', 'Main store', 'Dubai');
+insert into crm.employee (employee_id, employee_name, branch_id, status, crm_access_level, login_email)
+values ('T-HO', 'Other HO Admin', null, 'ACTIVE', 'HO_ADMIN', 'ho@other.test');
+insert into crm.customer (customer_name, mobile, created_by) values ('Other Customer', '+971 50 123 4567', 'T-HO');
+insert into crm.lead (customer_id, branch_id, assigned_to, source_code, created_by)
+select max(customer_id), (select branch_id from crm.branch where code = 'MAIN'), 'T-HO', 'WALK_IN', 'T-HO' from crm.customer;
+
+select crm_test.eq((select mobile from crm.customer where customer_name = 'Other Customer'), '501234567', 'phone rule is per company');
+select crm_test.raises($$insert into crm.customer (mobile) values ('9847000001')$$, 'other company rejects an Indian mobile');
+select crm_test.raises($$insert into crm.lead (customer_id, branch_id, assigned_to, source_code)
+                         values (1, (select branch_id from crm.branch where code = 'MAIN'), 'T-HO', 'WALK_IN')$$,
+                       'cannot link to another company''s customer');
+select crm_test.raises($$insert into crm.employee (employee_id, employee_name, status, crm_access_level, login_email)
+                         values ('T-X', 'X', 'ACTIVE', 'STAFF', 'HO@other.test')$$, 'login email unique across companies');
+
+set role crm_app;
+set app.employee_id = 'T-HO';
+select crm_test.eq((select count(*) from crm.lead), 1::bigint, 'second company sees only its own leads');
+select crm_test.eq((select count(*) from crm.customer), 1::bigint, 'second company sees only its own customers');
+select crm_test.eq((select count(*) from crm.branch), 1::bigint, 'second company sees only its own branches');
+select crm_test.eq((select count(*) from crm.agent_suggestion), 0::bigint, 'second company sees no other suggestions');
+select crm_test.eq((select count(*) from crm.lead_stage where code = 'WON'), 1::bigint, 'each company has its own stages');
+select crm_test.raises(format($$insert into crm.lead_source (tenant_id, source_code, source_name) values (%s, 'X', 'X')$$, :keycee_id),
+                       'cannot write into another company');
+select crm_test.eq((select count(*) from crm.tenant), 1::bigint, 'company sees only its own company record');
+
+select set_config('app.tenant_id', :'keycee_id', false);
+select crm_test.eq((select count(*) from crm.lead), 5::bigint, 'same employee id in first company sees first company only');
+select crm_test.eq((select count(*) from crm.customer where mobile = '501234567'), 0::bigint, 'first company cannot see second company customer');
 reset role;
 
 set client_min_messages = warning;

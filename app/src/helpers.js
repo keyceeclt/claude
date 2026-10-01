@@ -1,29 +1,51 @@
-const money = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
-const tz = 'Asia/Kolkata';
+// Formatting follows the signed-in person's company (currency, locale, time zone).
+const DEFAULT_MARKET = { currency: 'INR', locale: 'en-IN', timezone: 'Asia/Kolkata' };
+const cache = new Map();
 
-export function fmtMoney(v) {
-    return v === null || v === undefined || v === '' ? '—' : money.format(Number(v));
+export function market(m) {
+    const t = { ...DEFAULT_MARKET, ...Object.fromEntries(Object.entries(m || {}).filter(([k, v]) => k in DEFAULT_MARKET && v)) };
+    const key = `${t.currency}|${t.locale}|${t.timezone}`;
+    if (cache.has(key)) return cache.get(key);
+    const money = new Intl.NumberFormat(t.locale, { style: 'currency', currency: t.currency, maximumFractionDigits: 0 });
+    const f = {
+        ...t,
+        currencySymbol: money.formatToParts(0).find((p) => p.type === 'currency')?.value || t.currency,
+        fmtMoney: (v) => (v === null || v === undefined || v === '' ? '—' : money.format(Number(v))),
+        fmtNum: (v) => (v === null || v === undefined ? '—' : Number(v).toLocaleString(t.locale)),
+        fmtDate: (v) => {
+            if (!v) return '—';
+            // A bare date is a calendar day: show it as is, never shifted by time zone.
+            const d = typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? new Date(`${v}T12:00:00Z`) : new Date(v);
+            const timeZone = typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? 'UTC' : t.timezone;
+            return d.toLocaleDateString(t.locale, { timeZone, day: '2-digit', month: 'short', year: 'numeric' });
+        },
+        fmtDateTime: (v) => (v ? new Date(v).toLocaleString(t.locale, {
+            timeZone: t.timezone, day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'),
+        today: () => new Date().toLocaleDateString('en-CA', { timeZone: t.timezone }),
+        monthStart: () => `${f.today().slice(0, 7)}-01`,
+        // "2026-09-26T10:30" from <input type=datetime-local> is the company's local time.
+        localTimestamp: (v) => {
+            const s = blank(v);
+            if (!s || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(s)) return s;
+            const asUtc = new Date(`${s}:00Z`);
+            return new Date(asUtc.getTime() - offsetMinutes(asUtc, t.timezone) * 60e3).toISOString();
+        },
+    };
+    cache.set(key, f);
+    return f;
 }
-export function fmtNum(v) {
-    return v === null || v === undefined ? '—' : Number(v).toLocaleString('en-IN');
+
+// Minutes the time zone is ahead of UTC at a given instant.
+function offsetMinutes(date, timeZone) {
+    const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+        timeZone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+    }).formatToParts(date).map((x) => [x.type, x.value]));
+    return (Date.UTC(+p.year, p.month - 1, +p.day, +p.hour, +p.minute, +p.second) - date.getTime()) / 60e3;
 }
+
 export function fmtPct(v) {
     return v === null || v === undefined ? '—' : `${Number(v).toFixed(1)}%`;
-}
-export function fmtDate(v) {
-    if (!v) return '—';
-    const d = typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? new Date(`${v}T00:00:00+05:30`) : new Date(v);
-    return d.toLocaleDateString('en-IN', { timeZone: tz, day: '2-digit', month: 'short', year: 'numeric' });
-}
-export function fmtDateTime(v) {
-    if (!v) return '—';
-    return new Date(v).toLocaleString('en-IN', { timeZone: tz, day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-}
-export function todayIST() {
-    return new Date().toLocaleDateString('en-CA', { timeZone: tz });
-}
-export function monthStartIST() {
-    return `${todayIST().slice(0, 7)}-01`;
 }
 
 const ATTENTION = {
@@ -46,7 +68,7 @@ export function dbMessage(err) {
         return 'This record already exists.';
     }
     if (err.code === '23514') {
-        if (/mobile/.test(err.constraint || '')) return 'Enter a valid 10-digit Indian mobile number.';
+        if (/mobile/.test(err.constraint || '')) return 'Enter a valid mobile number.';
         return err.message.startsWith('new row') ? 'Some values are not allowed. Please check the form.' : err.message;
     }
     if (err.code === '23503') return 'A referenced record does not exist.';
@@ -79,7 +101,9 @@ export function blank(v) {
 
 export function viewHelpers(req, res, next) {
     Object.assign(res.locals, {
-        fmtMoney, fmtNum, fmtPct, fmtDate, fmtDateTime, attention, todayIST,
+        ...market(),
+        fmtPct, attention,
+        appName: process.env.APP_NAME || 'Retail Sales CRM',
         msg: typeof req.query.msg === 'string' ? req.query.msg : null,
         err: typeof req.query.err === 'string' ? req.query.err : null,
         path: req.path,

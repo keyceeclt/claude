@@ -3,7 +3,7 @@
 <% if (me.can_manage_config) { %><p><a class="btn" href="/admin/employees/new">+ Add staff</a></p><% } %>
 <div class="card"><div class="table-wrap"><table>
   <thead><tr><th>ID</th><th>Name</th><th>Branch</th><th class="hide-sm">Designation</th><th>Access</th><th class="hide-sm">Reports to</th><th>Status</th><th>Login</th></tr></thead>
-  <tbody><% rows.forEach(e => { const exited = e.exit_date && e.exit_date <= todayIST(); %><tr>
+  <tbody><% rows.forEach(e => { const exited = e.exit_date && e.exit_date <= today(); %><tr>
     <td><a href="/admin/employees/<%= encodeURIComponent(e.employee_id) %>"><%= e.employee_id %></a></td><td><%= e.employee_name %></td>
     <td><%= e.branch_id ? L.branch[e.branch_id]?.name : 'Head Office' %></td><td class="hide-sm"><%= L.label('DESIGNATION', e.designation) %></td>
     <td><%= L.levels.find(a => a.code === e.crm_access_level)?.label || e.crm_access_level %></td><td class="hide-sm"><%= e.manager_name || '—' %></td>

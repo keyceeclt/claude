@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { asUser } from '../db.js';
 import { loadLookups } from '../lookups.js';
-import { blank, todayIST, monthStartIST } from '../helpers.js';
+import { blank, market } from '../helpers.js';
 
 const router = Router();
 
@@ -9,7 +9,7 @@ const isDate = (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
 
 function page(view, title, load) {
     return async (req, res) => {
-        const data = await asUser(req.user.employee_id, async (db) => ({ ...(await load(db, req)), L: await loadLookups(db) }));
+        const data = await asUser(req.user, async (db) => ({ ...(await load(db, req)), L: await loadLookups(db) }));
         res.render(`reports/${view}`, { title, ...data });
     };
 }
@@ -17,7 +17,7 @@ function page(view, title, load) {
 router.get('/', (req, res) => res.redirect('/reports/daily'));
 
 router.get('/daily', page('daily', 'Daily MIS', async (db, req) => {
-    const date = isDate(req.query.date) ? req.query.date : todayIST();
+    const date = isDate(req.query.date) ? req.query.date : market(req.user).today();
     // Branch staff see their own branch column only (other branches would show as zeros).
     const branch = req.user.data_scope === 'ALL' ? null : req.user.branch_id;
     const rows = (await db.query(
@@ -39,17 +39,17 @@ router.get('/daily', page('daily', 'Daily MIS', async (db, req) => {
 router.get('/funnel', page('funnel', 'Monthly funnel', async (db) => ({
     rows: (await db.query(
         `select * from crm.v_branch_funnel_monthly
-         where month >= (date_trunc('month', current_date) - interval '5 months')
+         where month >= (date_trunc('month', crm.local_date(now())) - interval '5 months')
          order by month desc, branch_id`)).rows,
     sources: (await db.query(
         `select * from crm.v_source_performance_monthly
-         where month >= (date_trunc('month', current_date) - interval '2 months')
+         where month >= (date_trunc('month', crm.local_date(now())) - interval '2 months')
          order by month desc, branch_id, leads desc`)).rows,
 })));
 
 router.get('/staff', page('staff', 'Staff performance', async (db, req) => {
     const m = typeof req.query.m === 'string' && /^\d{4}-\d{2}$/.test(req.query.m) ? `${req.query.m}-01` : null;
-    const month = m || monthStartIST();
+    const month = m || market(req.user).monthStart();
     return {
         month,
         rows: (await db.query(

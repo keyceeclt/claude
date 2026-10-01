@@ -1,18 +1,11 @@
 import { Router } from 'express';
 import { asUser } from '../db.js';
 import { loadLookups } from '../lookups.js';
-import { act, blank } from '../helpers.js';
+import { act, blank, market } from '../helpers.js';
 import { requireScope } from '../auth.js';
 
 const router = Router();
 const PAGE = 100;
-
-// "2026-09-26T10:30" from <input type=datetime-local> is Kolkata time.
-export function istTimestamp(v) {
-    const s = blank(v);
-    if (!s) return null;
-    return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(s) ? `${s}:00+05:30` : s;
-}
 
 router.param('id', (req, res, next, id) => (/^\d+$/.test(id)
     ? next()
@@ -25,7 +18,7 @@ router.get('/', async (req, res) => {
         source: blank(req.query.source), attention: blank(req.query.attention), q: blank(req.query.q),
         page: Math.max(1, parseInt(req.query.page, 10) || 1),
     };
-    const data = await asUser(req.user.employee_id, async (db) => {
+    const data = await asUser(req.user, async (db) => {
         const L = await loadLookups(db);
         const where = [];
         const args = [];
@@ -56,11 +49,11 @@ router.get('/', async (req, res) => {
 });
 
 router.get('/new', async (req, res) => {
-    const L = await asUser(req.user.employee_id, loadLookups);
+    const L = await asUser(req.user, loadLookups);
     let customer = null;
     const mobile = blank(req.query.mobile);
     if (mobile) {
-        customer = await asUser(req.user.employee_id, async (db) =>
+        customer = await asUser(req.user, async (db) =>
             (await db.query('select * from crm.find_customer_by_mobile($1)', [mobile])).rows[0] || false);
     }
     res.render('leads/new', { title: 'New lead', L, mobile, customer });
@@ -69,7 +62,7 @@ router.get('/new', async (req, res) => {
 router.post('/', async (req, res) => {
     const b = req.body;
     const back = `/leads/new?mobile=${encodeURIComponent(b.mobile || '')}`;
-    await act(res, back, () => asUser(req.user.employee_id, async (db) => {
+    await act(res, back, () => asUser(req.user, async (db) => {
         const branchId = req.user.data_scope === 'ALL' ? blank(b.branch_id) : req.user.branch_id;
         let customerId = (await db.query('select customer_id from crm.find_customer_by_mobile($1)', [b.mobile])).rows[0]?.customer_id;
         if (!customerId) {
@@ -85,7 +78,7 @@ router.post('/', async (req, res) => {
              values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) returning lead_id`,
             [customerId, branchId, assigned, b.source_code, blank(b.campaign_id), blank(b.product_category),
              blank(b.product_interest), blank(b.budget_value), blank(b.expected_purchase_on), req.user.employee_id])).rows[0].lead_id;
-        const due = istTimestamp(b.first_followup_at);
+        const due = market(req.user).localTimestamp(b.first_followup_at);
         if (due) {
             await db.query(
                 `insert into crm.lead_activity (lead_id, employee_id, activity_type, due_at, notes)
@@ -122,7 +115,7 @@ async function loadLead(db, id) {
 }
 
 router.get('/:id', async (req, res) => {
-    const data = await asUser(req.user.employee_id, async (db) => {
+    const data = await asUser(req.user, async (db) => {
         const d = await loadLead(db, req.params.id);
         return d && { ...d, L: await loadLookups(db) };
     });
@@ -135,7 +128,7 @@ router.get('/:id', async (req, res) => {
 router.post('/:id/activity', async (req, res) => {
     const id = req.params.id;
     const b = req.body;
-    await act(res, `/leads/${id}`, () => asUser(req.user.employee_id, async (db) => {
+    await act(res, `/leads/${id}`, () => asUser(req.user, async (db) => {
         const pending = (await db.query(
             `select activity_id from crm.lead_activity where lead_id = $1 and completed_at is null
              order by due_at limit 1`, [id])).rows[0];
@@ -151,7 +144,7 @@ router.post('/:id/activity', async (req, res) => {
                  values ($1, $2, $3, now(), $4, $5)`,
                 [id, req.user.employee_id, b.activity_type, b.outcome, blank(b.notes)]);
         }
-        const next = istTimestamp(b.next_followup_at);
+        const next = market(req.user).localTimestamp(b.next_followup_at);
         if (next) {
             await db.query(
                 `insert into crm.lead_activity (lead_id, employee_id, activity_type, due_at, notes)
@@ -164,18 +157,18 @@ router.post('/:id/activity', async (req, res) => {
 
 router.post('/:id/followup', async (req, res) => {
     const id = req.params.id;
-    await act(res, `/leads/${id}`, () => asUser(req.user.employee_id, async (db) => {
+    await act(res, `/leads/${id}`, () => asUser(req.user, async (db) => {
         await db.query(
             `insert into crm.lead_activity (lead_id, employee_id, activity_type, due_at, notes)
              values ($1, $2, $3, $4, $5)`,
-            [id, req.user.employee_id, req.body.activity_type || 'CALL', istTimestamp(req.body.due_at), blank(req.body.notes)]);
+            [id, req.user.employee_id, req.body.activity_type || 'CALL', market(req.user).localTimestamp(req.body.due_at), blank(req.body.notes)]);
         return `/leads/${id}?msg=Follow-up scheduled.`;
     }));
 });
 
 router.post('/:id/stage', async (req, res) => {
     const id = req.params.id;
-    await act(res, `/leads/${id}`, () => asUser(req.user.employee_id, async (db) => {
+    await act(res, `/leads/${id}`, () => asUser(req.user, async (db) => {
         const { rowCount } = await db.query(
             'update crm.lead set stage_code = $2, lost_reason = $3 where lead_id = $1',
             [id, req.body.stage_code, blank(req.body.lost_reason)]);
@@ -186,7 +179,7 @@ router.post('/:id/stage', async (req, res) => {
 
 router.post('/:id/assign', requireScope('ALL', 'BRANCH'), async (req, res) => {
     const id = req.params.id;
-    await act(res, `/leads/${id}`, () => asUser(req.user.employee_id, async (db) => {
+    await act(res, `/leads/${id}`, () => asUser(req.user, async (db) => {
         const { rowCount } = await db.query('update crm.lead set assigned_to = $2 where lead_id = $1', [id, req.body.assigned_to]);
         if (!rowCount) throw Object.assign(new Error('denied'), { code: '42501' });
         await db.query(
@@ -198,12 +191,12 @@ router.post('/:id/assign', requireScope('ALL', 'BRANCH'), async (req, res) => {
 
 router.post('/:id/visit', async (req, res) => {
     const id = req.params.id;
-    await act(res, `/leads/${id}`, () => asUser(req.user.employee_id, async (db) => {
+    await act(res, `/leads/${id}`, () => asUser(req.user, async (db) => {
         const l = (await db.query('select customer_id, branch_id from crm.lead where lead_id = $1', [id])).rows[0];
         await db.query(
             `insert into crm.store_visit (customer_id, lead_id, branch_id, visit_at, attended_by, notes)
              values ($1, $2, $3, coalesce($4::timestamptz, now()), $5, $6)`,
-            [l.customer_id, id, l.branch_id, istTimestamp(req.body.visit_at), req.user.employee_id, blank(req.body.notes)]);
+            [l.customer_id, id, l.branch_id, market(req.user).localTimestamp(req.body.visit_at), req.user.employee_id, blank(req.body.notes)]);
         return `/leads/${id}?msg=Store visit recorded.`;
     }));
 });
@@ -211,11 +204,11 @@ router.post('/:id/visit', async (req, res) => {
 router.post('/:id/quotation', async (req, res) => {
     const id = req.params.id;
     const b = req.body;
-    await act(res, `/leads/${id}`, () => asUser(req.user.employee_id, async (db) => {
+    await act(res, `/leads/${id}`, () => asUser(req.user, async (db) => {
         const l = (await db.query('select customer_id, branch_id from crm.lead where lead_id = $1', [id])).rows[0];
         await db.query(
             `insert into crm.quotation (quotation_no, customer_id, lead_id, branch_id, prepared_by, quoted_on, valid_until, total_value)
-             values ($1, $2, $3, $4, $5, coalesce($6::date, current_date), $7, $8)`,
+             values ($1, $2, $3, $4, $5, coalesce($6::date, crm.local_date(now())), $7, $8)`,
             [blank(b.quotation_no), l.customer_id, id, l.branch_id, req.user.employee_id,
              blank(b.quoted_on), blank(b.valid_until), b.total_value]);
         return `/leads/${id}?msg=Quotation recorded.`;

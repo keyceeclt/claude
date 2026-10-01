@@ -10,7 +10,7 @@ router.param('id', (req, res, next, id) => (/^\d+$/.test(id)
 
 router.get('/', async (req, res) => {
     const q = blank(req.query.q);
-    const rows = await asUser(req.user.employee_id, async (db) => {
+    const rows = await asUser(req.user, async (db) => {
         const digits = q ? q.replace(/\D/g, '') : '';
         return (await db.query(
             `select c.*, (select count(*) from crm.lead l where l.customer_id = c.customer_id) as leads,
@@ -24,7 +24,7 @@ router.get('/', async (req, res) => {
 });
 
 router.get('/:id', async (req, res) => {
-    const data = await asUser(req.user.employee_id, async (db) => {
+    const data = await asUser(req.user, async (db) => {
         const customer = (await db.query('select * from crm.customer where customer_id = $1', [req.params.id])).rows[0];
         if (!customer) return null;
         const q = async (sql) => (await db.query(sql, [req.params.id])).rows;
@@ -42,7 +42,7 @@ router.get('/:id', async (req, res) => {
 
 router.post('/:id', async (req, res) => {
     const b = req.body;
-    await act(res, `/customers/${req.params.id}`, () => asUser(req.user.employee_id, async (db) => {
+    await act(res, `/customers/${req.params.id}`, () => asUser(req.user, async (db) => {
         const { rowCount } = await db.query(
             `update crm.customer set customer_name = $2, alt_mobile = $3, email = $4, area = $5, city = $6,
                     district = $7, segment = $8, marketing_consent = $9

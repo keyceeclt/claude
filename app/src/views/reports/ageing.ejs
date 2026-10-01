@@ -8,7 +8,7 @@
 <div class="card"><h2>Open leads by age</h2>
 <% if (!rows.length) { %><div class="empty">No open leads.</div><% } else { %>
 <div class="table-wrap"><table>
-  <thead><tr><th>Age</th><th class="num">Open leads</th><th class="num">Stated budget ₹</th><th class="num">Not contacted</th><th class="num">FU overdue</th><th class="num">No next FU</th><th class="num">Stale</th></tr></thead>
+  <thead><tr><th>Age</th><th class="num">Open leads</th><th class="num">Stated budget <%= currencySymbol %></th><th class="num">Not contacted</th><th class="num">FU overdue</th><th class="num">No next FU</th><th class="num">Stale</th></tr></thead>
   <tbody><% rows.forEach(r => { %><tr><td><%= r.age_bucket %></td><td class="num"><%= r.open_leads %></td><td class="num"><%= fmtMoney(r.stated_budget_value) %></td>
     <td class="num"><%= r.not_contacted_within_sla %></td><td class="num"><%= r.followup_overdue %></td><td class="num"><%= r.no_next_followup %></td><td class="num"><%= r.stale %></td></tr><% }) %></tbody>
 </table></div><% } %>

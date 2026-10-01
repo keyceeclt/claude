@@ -1,16 +1,17 @@
 -- =============================================================================
--- 0002 · Security: role-based, branch-scoped row level security.
+-- 0002 · Security: company isolation plus role-based, branch-scoped row
+-- level security.
 --
--- Every signed-in user maps to one employee. The employee's CRM access level
--- decides what they see:
+-- 1. Company isolation: a RESTRICTIVE policy on every table requires
+--    tenant_id = crm.current_tenant_id(). It is ANDed with every other policy,
+--    so no role, bug or query can read or write another company's rows.
+-- 2. Inside a company, every signed-in user maps to one employee. The
+--    employee's CRM access level decides what they see:
 --   ALL     Head Office: every branch
 --   BRANCH  Branch Manager: their own branch
 --   OWN     Staff / telecaller: leads assigned to or created by them
 -- can_write = false gives read-only access (e.g. an HO analyst).
 -- Config and master data changes need can_manage_config.
---
--- Supabase: run `grant crm_app to authenticated;` after this migration and set
--- employee.auth_user_id for each login.
 -- =============================================================================
 
 do $$ begin
@@ -22,28 +23,32 @@ end $$;
 -- The acting employee's scope, resolved once per statement.
 create function crm.me_branch() returns smallint
 language sql stable security definer set search_path = crm, pg_temp as $$
-    select branch_id from crm.employee where employee_id = crm.current_employee_id()
+    select branch_id from crm.employee
+    where tenant_id = crm.current_tenant_id() and employee_id = crm.current_employee_id()
 $$;
 
 create function crm.me_scope() returns text
 language sql stable security definer set search_path = crm, pg_temp as $$
     select a.data_scope
-    from crm.employee e join crm.access_level a on a.code = e.crm_access_level
-    where e.employee_id = crm.current_employee_id()
+    from crm.employee e
+    join crm.access_level a on a.tenant_id = e.tenant_id and a.code = e.crm_access_level
+    where e.tenant_id = crm.current_tenant_id() and e.employee_id = crm.current_employee_id()
 $$;
 
 create function crm.me_can_write() returns boolean
 language sql stable security definer set search_path = crm, pg_temp as $$
     select coalesce(bool_and(a.can_write), false)
-    from crm.employee e join crm.access_level a on a.code = e.crm_access_level
-    where e.employee_id = crm.current_employee_id()
+    from crm.employee e
+    join crm.access_level a on a.tenant_id = e.tenant_id and a.code = e.crm_access_level
+    where e.tenant_id = crm.current_tenant_id() and e.employee_id = crm.current_employee_id()
 $$;
 
 create function crm.me_can_manage_config() returns boolean
 language sql stable security definer set search_path = crm, pg_temp as $$
     select coalesce(bool_and(a.can_manage_config), false)
-    from crm.employee e join crm.access_level a on a.code = e.crm_access_level
-    where e.employee_id = crm.current_employee_id()
+    from crm.employee e
+    join crm.access_level a on a.tenant_id = e.tenant_id and a.code = e.crm_access_level
+    where e.tenant_id = crm.current_tenant_id() and e.employee_id = crm.current_employee_id()
 $$;
 
 -- System-maintained fields are written by triggers regardless of who acts.
@@ -61,6 +66,7 @@ language sql stable security definer set search_path = crm, pg_temp as $$
     select c.customer_id, c.customer_name, c.home_branch_id
     from crm.customer c
     where crm.current_employee_id() is not null
+      and c.tenant_id = crm.current_tenant_id()
       and c.mobile = crm.normalize_mobile(p_mobile)
 $$;
 
@@ -74,6 +80,7 @@ grant insert, update on crm.customer, crm.lead, crm.lead_activity, crm.store_vis
     crm.lookup_value, crm.access_level, crm.setting, crm.branch, crm.lead_source,
     crm.lead_stage, crm.activity_outcome
     to crm_app;
+grant update (name, ai_enabled, ai_monthly_budget_usd, ai_auto_schedule) on crm.tenant to crm_app;
 grant execute on all functions in schema crm to crm_app;
 -- No DELETE for app users: records are closed or deactivated, never removed.
 
@@ -227,3 +234,30 @@ create policy sale_item_insert on crm.sale_item for insert to crm_app with check
 create policy sale_item_update on crm.sale_item for update to crm_app using (
     crm.me_can_write() and crm.me_scope() in ('ALL', 'BRANCH')
     and exists (select 1 from crm.sale s where s.sale_id = sale_item.sale_id));
+
+-- -----------------------------------------------------------------------------
+-- The company record itself: members read it, config managers edit AI settings.
+-- -----------------------------------------------------------------------------
+alter table crm.tenant enable row level security;
+create policy tenant_read on crm.tenant for select to crm_app
+    using (tenant_id = crm.current_tenant_id() and crm.current_employee_id() is not null);
+create policy tenant_update on crm.tenant for update to crm_app
+    using (tenant_id = crm.current_tenant_id() and crm.me_can_manage_config());
+
+-- -----------------------------------------------------------------------------
+-- Company isolation on every company-owned table (ANDed with the policies above).
+-- -----------------------------------------------------------------------------
+do $$
+declare t text;
+begin
+    for t in
+        select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
+        join pg_attribute a on a.attrelid = c.oid and a.attname = 'tenant_id' and not a.attisdropped
+        where n.nspname = 'crm' and c.relkind = 'r' and c.relname <> 'tenant'
+    loop
+        execute format('alter table crm.%I enable row level security', t);
+        execute format('create policy tenant_isolation on crm.%I as restrictive to crm_app
+                        using (tenant_id = crm.current_tenant_id())
+                        with check (tenant_id = crm.current_tenant_id())', t);
+    end loop;
+end $$;

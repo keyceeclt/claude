@@ -6,7 +6,7 @@
      ['new_leads','New leads'],['junk_leads','Junk leads'],['leads_reached','Leads reached'],
      ['followups_due','Follow-ups due'],['followups_on_time','Done on time'],['followups_late','Done late'],['followups_still_overdue','Still overdue'],
      ['store_visits','Store visits'],['walk_in_visits','of which walk-ins'],['quotations','Quotations'],
-     ['sales_count','Invoices'],['sales_value','Sales ₹'],['lead_sales_value','From leads ₹'],['walk_in_sales_value','Walk-in ₹'],['leads_lost','Leads lost']];
+     ['sales_count','Invoices'],['sales_value','Sales ' + currencySymbol],['lead_sales_value','From leads ' + currencySymbol],['walk_in_sales_value','Walk-in ' + currencySymbol],['leads_lost','Leads lost']];
    const money = ['sales_value','lead_sales_value','walk_in_sales_value']; %>
 <div class="tiles">
   <div class="tile"><div class="k">Sales</div><div class="v"><%= fmtMoney(sum('sales_value')) %></div><div class="small muted"><%= sum('sales_count') %> invoices</div></div>

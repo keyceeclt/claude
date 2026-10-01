@@ -16,7 +16,7 @@
     <label>Status <select name="status" required>
       <% (L.list.EMPLOYEE_STATUS || []).forEach(v => { %><option value="<%= v.code %>" <%= e.status === v.code ? 'selected' : '' %>><%= v.label %></option><% }) %></select></label>
     <label>CRM access level <select name="crm_access_level" required>
-      <% L.levels.forEach(a => { %><option value="<%= a.code %>" <%= e.crm_access_level === a.code ? 'selected' : '' %>><%= a.label %> (sees <%= a.data_scope === 'ALL' ? 'all branches' : a.data_scope === 'BRANCH' ? 'own branch' : 'own leads' %>)</option><% }) %></select></label>
+      <% L.assignableLevels.forEach(a => { %><option value="<%= a.code %>" <%= e.crm_access_level === a.code ? 'selected' : '' %>><%= a.label %> (sees <%= a.data_scope === 'ALL' ? 'all branches' : a.data_scope === 'BRANCH' ? 'own branch' : 'own leads' %>)</option><% }) %></select></label>
     <label>Reports to <select name="reporting_manager_id"><option value="">—</option>
       <% L.employees.filter(x => x.is_active && x.employee_id !== e.employee_id).forEach(x => { %><option value="<%= x.employee_id %>" <%= e.reporting_manager_id === x.employee_id ? 'selected' : '' %>><%= x.employee_name %></option><% }) %></select></label>
     <label>Joining date <input type="date" name="joining_date" value="<%= e.joining_date || '' %>"></label>
@@ -41,8 +41,8 @@
 <div class="card"><h2>Monthly targets</h2>
   <form method="post" action="/admin/employees/<%= encodeURIComponent(e.employee_id) %>/target" class="actions">
     <%- include('../partials/csrf') %>
-    <input type="month" name="month" value="<%= todayIST().slice(0, 7) %>" aria-label="Month">
-    <select name="target_type" aria-label="Target type"><option value="SALES_VALUE">Sales value ₹</option><option value="SALES_COUNT">Invoices</option><option value="LEADS_WON">Leads won</option><option value="STORE_VISITS">Store visits</option></select>
+    <input type="month" name="month" value="<%= today().slice(0, 7) %>" aria-label="Month">
+    <select name="target_type" aria-label="Target type"><option value="SALES_VALUE">Sales value <%= currencySymbol %></option><option value="SALES_COUNT">Invoices</option><option value="LEADS_WON">Leads won</option><option value="STORE_VISITS">Store visits</option></select>
     <input type="number" name="target_value" min="0" required placeholder="Target" aria-label="Target value">
     <button class="btn secondary small">Save target</button>
   </form>
