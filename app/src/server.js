@@ -11,6 +11,7 @@ import salesRoutes from './routes/sales.js';
 import campaignRoutes from './routes/campaigns.js';
 import reportRoutes from './routes/reports.js';
 import adminRoutes from './routes/admin.js';
+import aiRoutes from './routes/ai.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -45,6 +46,7 @@ export function createApp() {
     app.use('/campaigns', campaignRoutes);
     app.use('/reports', reportRoutes);
     app.use('/admin', adminRoutes);
+    app.use('/ai', aiRoutes);
 
     app.use((req, res) => res.status(404).render('error', { title: 'Not found', message: 'This page does not exist, or you do not have access to it.' }));
     app.use((err, req, res, next) => {

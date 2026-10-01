@@ -46,12 +46,12 @@ $$;
 -- Everything the app needs about the signed-in person and their company.
 create function crm.auth_session_user(p_tenant smallint, p_employee text)
 returns table (
-    tenant_id smallint, tenant_name text, currency text, locale text, timezone text,
+    tenant_id smallint, tenant_name text, currency text, locale text, timezone text, phone_prefix text,
     ai_enabled boolean, employee_id text, employee_name text, branch_id smallint, branch_name text,
     access_level text, access_label text, data_scope text, can_write boolean, can_manage_config boolean,
     must_change_password boolean)
 language sql stable security definer set search_path = crm, pg_temp as $$
-    select t.tenant_id, t.name, t.currency, t.locale, t.timezone, t.ai_enabled,
+    select t.tenant_id, t.name, t.currency, t.locale, t.timezone, t.phone_prefix, t.ai_enabled,
            e.employee_id, e.employee_name, e.branch_id, b.name,
            a.code, a.label, a.data_scope, a.can_write, a.can_manage_config, l.must_change_password
     from crm.employee e

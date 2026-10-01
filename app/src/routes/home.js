@@ -32,7 +32,17 @@ router.get('/', async (req, res) => {
              from crm.v_staff_performance_monthly where month = $1::date
                and ($2::text is null or employee_id = $2)`,
             [market(req.user).monthStart(), req.user.data_scope === 'OWN' ? req.user.employee_id : owner])).rows[0];
-        return { L, followups, attentionLeads, today, month };
+        const suggestions = (await db.query(
+            `select s.*, c.customer_name from crm.agent_suggestion s
+             join crm.lead l on l.lead_id = s.lead_id join crm.customer c on c.customer_id = l.customer_id
+             where s.kind = 'FOLLOWUP' and (s.status = 'OPEN' or (s.status = 'APPLIED' and s.created_at > now() - interval '1 day'))
+               and ($1::text is null or s.assigned_to = $1)
+             order by s.status = 'APPLIED', s.priority, s.suggested_due_at limit 20`, [owner])).rows;
+        const brief = req.user.data_scope === 'OWN' ? null : (await db.query(
+            `select * from crm.agent_brief where brief_date >= $1::date - 1 and branch_id is not distinct from $2
+             order by brief_date desc limit 1`,
+            [market(req.user).today(), req.user.data_scope === 'ALL' ? null : req.user.branch_id])).rows[0];
+        return { L, followups, attentionLeads, today, month, suggestions, brief };
     });
     res.render('home', { title: 'My Day', owner, ...data });
 });

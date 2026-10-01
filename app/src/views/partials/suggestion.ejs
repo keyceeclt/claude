@@ -1,0 +1,22 @@
+<%# One AI suggestion with its actions. Needs: s, L, back, showLead %>
+<li class="suggestion">
+  <div>
+    <span class="pill <%= s.priority === 1 ? 'bad' : s.priority === 2 ? 'warn' : 'muted' %>">AI · <%= s.priority === 1 ? 'today' : s.priority === 2 ? 'soon' : 'low' %></span>
+    <% if (showLead) { %><a href="/leads/<%= s.lead_id %>"><%= s.customer_name || 'Lead #' + s.lead_id %></a> · <% } %>
+    <strong><%= L.label('ACTIVITY_TYPE', s.activity_type) %></strong> <%= fmtDateTime(s.suggested_due_at) %>
+    <% if (s.assigned_to && showLead) { %><span class="small muted">· <%= L.employee[s.assigned_to]?.employee_name || s.assigned_to %></span><% } %>
+    <div class="small"><%= s.reason %></div>
+    <% if (s.message) { %><div class="small muted">Say: “<%= s.message %>”</div><% } %>
+  </div>
+  <div class="actions">
+    <% if (s.status === 'OPEN') { %>
+      <form method="post" action="/ai/suggestions/<%= s.suggestion_id %>/accept"><%- include('csrf') %><input type="hidden" name="back" value="<%= back %>"><button class="btn small">Schedule</button></form>
+      <form method="post" action="/ai/suggestions/<%= s.suggestion_id %>/dismiss"><%- include('csrf') %><input type="hidden" name="back" value="<%= back %>"><button class="btn small secondary">Dismiss</button></form>
+    <% } else if (s.status === 'APPLIED') { %>
+      <span class="pill">scheduled by AI</span>
+      <form method="post" action="/ai/suggestions/<%= s.suggestion_id %>/undo"><%- include('csrf') %><input type="hidden" name="back" value="<%= back %>"><button class="btn small secondary">Undo</button></form>
+    <% } else { %>
+      <span class="pill muted"><%= s.status.toLowerCase() %></span>
+    <% } %>
+  </div>
+</li>

@@ -62,6 +62,7 @@ export function attention(code) {
 export function dbMessage(err) {
     if (!err || !err.code) return 'Something went wrong.';
     if (err.code === '42501') return 'You do not have access to do that.';
+    if (err.code === 'P0001') return err.message;
     if (err.code === '23505') {
         if (/customer_mobile/.test(err.constraint || '')) return 'A customer with this mobile number already exists.';
         if (/invoice_no/.test(err.constraint || '')) return 'This invoice number already exists for the branch.';

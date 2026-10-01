@@ -101,7 +101,8 @@ create table crm.agent_brief (
     run_id              bigint not null,
     branch_id           smallint,
     brief_date          date not null,
-    body                text not null,
+    body                text not null,     -- headline
+    points              jsonb not null default '[]',  -- [{kind, text, owner}]
     facts               jsonb not null,
     unverified_numbers  text[] not null default '{}',  -- numbers in body not found in facts
     created_at          timestamptz not null default now(),
@@ -117,7 +118,7 @@ grant select on crm.agent_run, crm.agent_suggestion, crm.agent_brief to crm_app;
 grant insert on crm.agent_run, crm.agent_suggestion, crm.agent_brief to crm_app;
 grant update (status, input_tokens, output_tokens, cost_usd, items, note, model, finished_at) on crm.agent_run to crm_app;
 grant update (status, activity_id, decided_by, decided_at) on crm.agent_suggestion to crm_app;
-grant update (body, facts, unverified_numbers, run_id, created_at) on crm.agent_brief to crm_app;
+grant update (body, points, facts, unverified_numbers, run_id, created_at) on crm.agent_brief to crm_app;
 grant delete on crm.lead_activity to crm_app;   -- only agent follow-ups, see policy below
 
 alter table crm.agent_run enable row level security;
@@ -259,3 +260,28 @@ left join crm.lead_stage st on st.tenant_id = l.tenant_id and st.is_won
 group by 1, 2, 3, 4;
 
 grant select on crm.v_ai_usage_monthly, crm.v_agent_suggestion_outcomes to crm_app;
+
+-- Companies the scheduled agent runner should visit (runner role crm_auth).
+create function crm.ai_enabled_tenants()
+returns table (tenant_id smallint, code text)
+language sql stable security definer set search_path = crm, pg_temp as $$
+    select tenant_id, code from crm.tenant where ai_enabled and is_active order by tenant_id
+$$;
+revoke execute on function crm.ai_enabled_tenants() from public, crm_app;
+grant execute on function crm.ai_enabled_tenants() to crm_auth;
+
+-- Next contact time inside the company's contact hours, at least p_hours from now.
+create function crm.next_contact_time(p_hours numeric)
+returns timestamptz language sql stable as $$
+    with t as (
+        select (now() + make_interval(mins => greatest(0, p_hours * 60)::int)) at time zone crm.tenant_timezone() as l,
+               coalesce(crm.setting_value('CONTACT_HOURS_START'), 10)::int as h0,
+               coalesce(crm.setting_value('CONTACT_HOURS_END'), 19)::int as h1)
+    select (case
+                when extract(hour from l) < h0 then date_trunc('day', l) + make_interval(hours => h0)
+                when extract(hour from l) >= h1 then date_trunc('day', l) + interval '1 day' + make_interval(hours => h0)
+                else date_trunc('minute', l)
+            end) at time zone crm.tenant_timezone()
+    from t
+$$;
+grant execute on function crm.next_contact_time(numeric) to crm_app;

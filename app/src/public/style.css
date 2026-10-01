@@ -125,3 +125,13 @@ progress { width: 100%; height: .55rem; accent-color: var(--brand); }
 }
 [hidden] { display: none !important; }
 fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+
+/* AI suggestions and briefs */
+.suggestions { list-style: none; margin: 0; padding: 0; }
+.suggestion { display: flex; justify-content: space-between; gap: .75rem; align-items: flex-start; padding: .6rem 0; border-top: 1px solid var(--line); }
+.suggestion:first-child { border-top: 0; }
+.suggestion form { display: inline; }
+@media (max-width: 640px) { .suggestion { flex-direction: column; } }
+.brief-points { margin: .5rem 0 0; padding-left: 0; list-style: none; }
+.brief-points li { margin: .35rem 0; }
+.draft { white-space: pre-wrap; background: var(--brand-soft); border-radius: 8px; padding: .75rem; }

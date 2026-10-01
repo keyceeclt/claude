@@ -3,6 +3,7 @@ import { asUser } from '../db.js';
 import { loadLookups } from '../lookups.js';
 import { act, blank, market } from '../helpers.js';
 import { requireScope } from '../auth.js';
+import { aiAvailable, LANGUAGES } from './ai.js';
 
 const router = Router();
 const PAGE = 100;
@@ -108,6 +109,8 @@ async function loadLead(db, id) {
         visits: await q('select * from crm.store_visit where lead_id = $1 order by visit_at desc'),
         quotations: await q('select * from crm.quotation where lead_id = $1 order by quoted_on desc'),
         sales: await q('select * from crm.sale where lead_id = $1 order by invoice_date desc'),
+        suggestions: await q(`select * from crm.agent_suggestion where lead_id = $1
+                              and (kind = 'FOLLOWUP' or status = 'OPEN') order by created_at desc limit 10`),
         otherLeads: await q(`select l.lead_id, l.stage_code, l.created_at, l.branch_id from crm.lead l
                              where l.customer_id = (select customer_id from crm.lead where lead_id = $1) and l.lead_id <> $1
                              order by l.created_at desc`),
@@ -120,7 +123,7 @@ router.get('/:id', async (req, res) => {
         return d && { ...d, L: await loadLookups(db) };
     });
     if (!data) return res.status(404).render('error', { title: 'Lead not found', message: 'This lead does not exist, or it is not assigned to you.' });
-    res.render('leads/show', { title: `Lead #${req.params.id}`, ...data });
+    res.render('leads/show', { title: `Lead #${req.params.id}`, aiOn: aiAvailable(req.user), LANGUAGES, ...data });
 });
 
 // Log a contact. It closes the lead's oldest pending follow-up (so on-time

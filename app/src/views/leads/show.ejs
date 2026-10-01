@@ -5,8 +5,8 @@
   <div>
     <h1><%= l.customer_name || 'No name' %> <span class="muted small">Lead #<%= l.lead_id %></span></h1>
     <div class="actions"><%- include('../partials/stage', { code: l.stage_code }) %> <%- include('../partials/attention', { code: l.attention_reason }) %>
-      <a href="tel:+91<%= l.mobile %>" class="btn small secondary">Call <%= l.mobile %></a>
-      <a href="https://wa.me/91<%= l.mobile %>" class="btn small secondary" rel="noopener" target="_blank">WhatsApp</a>
+      <a href="tel:+<%= me.phone_prefix %><%= l.mobile %>" class="btn small secondary">Call <%= l.mobile %></a>
+      <a href="https://wa.me/<%= me.phone_prefix %><%= l.mobile %>" class="btn small secondary" rel="noopener" target="_blank">WhatsApp</a>
     </div>
   </div>
   <% if (me.data_scope !== 'OWN' && !l.is_won) { %><a class="btn" href="/sales/new?lead_id=<%= l.lead_id %>">Record sale</a><% } %>
@@ -43,6 +43,37 @@
       <% otherLeads.forEach(o => { %><a href="/leads/<%= o.lead_id %>">#<%= o.lead_id %></a> (<%= L.stage[o.stage_code]?.label || o.stage_code %>) <% }) %></p><% } %>
   </div>
 </div>
+
+<% const nextSteps = suggestions.filter(x => x.kind === 'FOLLOWUP');
+   const drafts = suggestions.filter(x => x.kind === 'MESSAGE' && x.status === 'OPEN'); %>
+<% if (aiOn || suggestions.length) { %>
+<div class="card" id="ai">
+  <h2>AI assistant</h2>
+  <% if (nextSteps.length) { %>
+    <h3>Suggested next steps</h3>
+    <ul class="suggestions"><% nextSteps.slice(0, 3).forEach(s => { %><%- include('../partials/suggestion', { s, L, back: '/leads/' + l.lead_id, showLead: false }) %><% }) %></ul>
+  <% } %>
+  <% drafts.forEach(d => { %>
+    <h3>Message draft</h3>
+    <textarea id="draft-<%= d.suggestion_id %>" class="draft" rows="5" aria-label="Message draft"><%= d.message %></textarea>
+    <p class="small muted">Tip: <%= d.reason %> · Check the facts before sending; the AI only knows what is in the CRM.</p>
+    <div class="actions">
+      <a class="btn small" data-wa-from="draft-<%= d.suggestion_id %>" href="https://wa.me/<%= me.phone_prefix %><%= l.mobile %>?text=<%= encodeURIComponent(d.message) %>" target="_blank" rel="noopener">Open in WhatsApp</a>
+      <form method="post" action="/ai/suggestions/<%= d.suggestion_id %>/used"><%- include('../partials/csrf') %><input type="hidden" name="back" value="/leads/<%= l.lead_id %>"><button class="btn small secondary">Mark as sent</button></form>
+      <form method="post" action="/ai/suggestions/<%= d.suggestion_id %>/dismiss"><%- include('../partials/csrf') %><input type="hidden" name="back" value="/leads/<%= l.lead_id %>"><button class="btn small secondary">Discard</button></form>
+    </div>
+  <% }) %>
+  <% if (aiOn && !closed && me.can_write) { %>
+    <form method="post" action="/ai/leads/<%= l.lead_id %>/draft" class="actions">
+      <%- include('../partials/csrf') %>
+      <select name="language" aria-label="Language"><% LANGUAGES.forEach(x => { %><option><%= x %></option><% }) %></select>
+      <input name="goal" maxlength="300" placeholder="Aim (optional), e.g. invite for a demo this weekend" aria-label="Aim of the message">
+      <button class="btn small secondary">Draft a message</button>
+    </form>
+    <p class="small muted">Drafts take a few seconds. Nothing is sent until you send it yourself.</p>
+  <% } %>
+</div>
+<% } %>
 
 <% if (!closed) { %>
 <div class="card" id="log">
@@ -134,7 +165,7 @@
             <strong>Follow-up due</strong> (<%= L.label('ACTIVITY_TYPE', a.activity_type) %>)
             <% if (a.followup_status === 'OVERDUE') { %><span class="pill bad">overdue</span><% } %>
           <% } %>
-          · <%= L.employee[a.employee_id]?.employee_name || a.employee_id %>
+          · <%= L.employee[a.employee_id]?.employee_name || a.employee_id %><% if (a.origin === 'AGENT') { %> <span class="pill">scheduled by AI</span><% } %>
           <% if (a.notes) { %><div><%= a.notes %></div><% } %>
         <% } else if (e.kind === 'visit') { %>
           <strong>Store visit</strong> · <%= L.employee[e.v.attended_by]?.employee_name || '' %><% if (e.v.notes) { %><div><%= e.v.notes %></div><% } %>

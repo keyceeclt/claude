@@ -101,7 +101,9 @@ begin
     insert into crm.setting (tenant_id, key, value, unit, description) values
         (p_tenant, 'FIRST_CONTACT_SLA_HOURS', 4,  'hours', 'A new lead must be reached within this time'),
         (p_tenant, 'FOLLOWUP_GRACE_HOURS',    24, 'hours', 'A follow-up done within this time after its due time counts as on time'),
-        (p_tenant, 'STALE_LEAD_DAYS',         7,  'days',  'An open lead with no activity for this long is flagged stale');
+        (p_tenant, 'STALE_LEAD_DAYS',         7,  'days',  'An open lead with no activity for this long is flagged stale'),
+        (p_tenant, 'CONTACT_HOURS_START',     10, 'hour',  'AI agents schedule customer contact no earlier than this hour (company time)'),
+        (p_tenant, 'CONTACT_HOURS_END',       19, 'hour',  'AI agents schedule customer contact before this hour (company time)');
 
     -- The AI agents act through this employee record, so every agent action
     -- goes through the same security rules and shows "AI sales agent" in history.

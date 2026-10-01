@@ -1,6 +1,8 @@
 # Key Cee Associates · Central CRM & Business Intelligence — Blueprint v0.1
 
-Status: **draft for Head Office review** (2026-09-26). Built from the operating
+Status: **draft for Head Office review** (2026-09-26; updated 2026-10-01 when
+the platform became a multi-company agentic sales CRM with Key Cee as company #1,
+see [PLATFORM.md](PLATFORM.md) §3–4). Built from the operating
 mode, knowledge-base structure, company profile, Employee_Master fields and
 architecture shared in the project. Nothing below invents business data: any
 value not supplied by Head Office is a **placeholder** in the database
@@ -89,6 +91,10 @@ obeys it automatically.
 | Branch Manager | Own branch: leads, customers, sales, staff | Own branch records, sales entry |
 | Sales Staff / Telecaller | Leads assigned to or created by them | Own leads and follow-ups |
 | Exited staff / unknown login | Nothing | Nothing |
+| AI sales agent (system account) | All branches of its own company | Only suggestions, briefs and (if allowed) pending follow-ups; never stages, sales, customers or settings; cannot sign in |
+
+Every rule above applies inside one company: a restrictive policy on every
+table also requires the row's company to be the session's company.
 
 Staff can look up any customer by mobile before creating one, so duplicates are
 caught across branches without exposing other branches' pipelines.
@@ -134,6 +140,8 @@ context (market, staff count, footfall). That context is **not yet provided**
 | Security | Each request runs its queries as the signed-in employee (`crm_app` role + row-level security) | A bug in a page cannot show another branch's data |
 | MIS | Built-in report screens on the MIS views; Looker Studio / Metabase can read the same views later | Management reports without extra cost |
 | Data loads | CSV import screen (leads, billing sales) with check-before-save | Bad rows are reported, nothing half-imported |
+| Companies | `tenant_id` on every row + restrictive row-level policy; per-company phone rule, time zone, currency | One platform for many retailers without any company seeing another's data |
+| AI agents | Claude (Anthropic SDK) called from the same Node service; per-company switch and monthly budget | Agents use the same database security as staff; cost is visible and capped |
 
 Expected running cost to start: roughly US$10–35 a month (small Node service +
 managed Postgres). Everything is standard PostgreSQL and Node, so no lock-in.
@@ -149,7 +157,7 @@ managed Postgres). Everything is standard PostgreSQL and Node, so no lock-in.
 - Employee Status, Designation, Department, CRM access levels.
 - Lead stages, lead sources, lost reasons, activity types and outcomes.
 - Product categories, customer segments.
-- Rules: first-contact SLA (placeholder 4 h), follow-up grace (24 h), stale lead (7 days).
+- Rules: first-contact SLA (placeholder 4 h), follow-up grace (24 h), stale lead (7 days), customer contact hours for AI-scheduled follow-ups (10:00–19:00).
 
 **Decisions**
 - OK on the five architecture refinements in §2.
@@ -159,14 +167,16 @@ managed Postgres). Everything is standard PostgreSQL and Node, so no lock-in.
 
 ## 10. Test and improve
 
-`scripts/test.sh` builds a fresh database and runs 47 database checks covering the
+`scripts/test.sh` builds a fresh database and runs 75 database checks covering the
 business rules (no Won without a sale, lost needs a reason, duplicate and
 invalid mobiles rejected, visit/sale must match the lead's customer), the KPI
 arithmetic (conversion excludes junk, campaign cost per won lead, walk-in vs
 lead revenue, target achievement), and branch security (manager sees only
-their branch, staff only their leads, exited staff nothing), then 15
-end-to-end tests that drive the web app like a user. CI runs both on every
-pull request.
+their branch, staff only their leads, exited staff nothing), the agents'
+limits (cannot change leads or record sales, undo works) and company isolation
+(a second company sees none of the first company's rows), then 22 end-to-end
+tests that drive the web app and the agents (with a stand-in model) like a
+user. CI runs both on every pull request.
 
 Next iteration (after §9 answers): replace placeholders, import a real data
 sample, run the data-quality pass on it, and pilot at one branch.

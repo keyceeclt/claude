@@ -32,6 +32,21 @@
   </div>
 </div>
 
+<% if (brief) { %>
+<section class="card"><h2>Daily brief · <%= fmtDate(brief.brief_date) %> <span class="pill">AI</span></h2>
+  <p><strong><%= brief.body %></strong></p>
+  <ul class="brief-points"><% brief.points.forEach(p => { %><li><span class="pill <%= p.kind === 'URGENT' || p.kind === 'LEAK' ? 'bad' : p.kind === 'WIN' ? 'ok' : '' %>"><%= p.kind.toLowerCase() %></span> <%= p.text %><% if (p.owner) { %> <span class="small muted">· <%= p.owner %></span><% } %></li><% }) %></ul>
+  <% if (brief.unverified_numbers.length) { %><p class="small flash bad">Check before acting: these numbers are not in the CRM figures the brief was written from: <%= brief.unverified_numbers.join(', ') %>.</p><% } %>
+  <p class="small muted">Written by AI from the CRM's own figures for <%= brief.facts.scope %>. Reports have the full numbers.</p>
+</section>
+<% } %>
+<% if (suggestions.length) { %>
+<section class="card"><h2>AI suggested next steps</h2>
+  <p class="small muted">For leads at risk of being lost. Schedule the ones that make sense, dismiss the rest.</p>
+  <ul class="suggestions"><% suggestions.forEach(s => { %><%- include('partials/suggestion', { s, L, back: '/', showLead: true }) %><% }) %></ul>
+</section>
+<% } %>
+
 <% const fuTable = (all, empty, more) => { const rows = all.slice(0, 15); %>
   <% if (!rows.length) { %><div class="empty"><%= empty %></div><% } else { %>
   <div class="table-wrap"><table>

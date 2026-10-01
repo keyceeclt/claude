@@ -17,3 +17,12 @@ document.querySelectorAll('input[type=file][data-into]').forEach((input) => {
         if (file) document.getElementById(input.dataset.into).value = await file.text();
     });
 });
+// WhatsApp links send the (possibly edited) draft text.
+document.querySelectorAll('a[data-wa-from]').forEach((a) => {
+    a.addEventListener('click', () => {
+        const text = document.getElementById(a.dataset.waFrom)?.value || '';
+        const url = new URL(a.href);
+        url.searchParams.set('text', text);
+        a.href = url.toString();
+    });
+});

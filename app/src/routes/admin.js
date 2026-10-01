@@ -14,6 +14,7 @@ router.get('/employees', requireScope('ALL', 'BRANCH'), async (req, res) => {
         rows: (await db.query(
             `select e.*, m.employee_name as manager_name from crm.employee e
              left join crm.employee m on m.employee_id = e.reporting_manager_id
+             where e.crm_access_level <> 'AI_AGENT'
              order by (e.exit_date is not null and e.exit_date <= crm.local_date(now())), e.branch_id nulls first, e.employee_name`)).rows,
         L: await loadLookups(db),
     }));

@@ -1,5 +1,5 @@
 <div class="page-head"><h1><%= title %></h1>
 <nav class="actions">
-  <% const items = [['/admin/employees','Staff'],['/admin/import','Import data']]; if (me.can_manage_config) items.push(['/admin/config','Pick-lists & rules']); %>
+  <% const items = [['/admin/employees','Staff'],['/admin/import','Import data']]; if (me.can_manage_config) items.push(['/admin/config','Pick-lists & rules'], ['/ai/settings','AI agents']); %>
   <% items.forEach(([h,t]) => { %><a class="btn small <%= path.startsWith(h) ? '' : 'secondary' %>" href="<%= h %>"><%= t %></a><% }) %>
 </nav></div>
