@@ -1,0 +1,26 @@
+<%- include('../partials/header') %>
+<%- include('nav') %>
+<div class="grid grid-2">
+<div class="card"><h2>Issues</h2>
+<% if (!summary.length) { %><div class="empty">No data-quality issues found.</div><% } else { %>
+<table><thead><tr><th>Issue</th><th>Severity</th><th class="num">Count</th></tr></thead><tbody>
+<% summary.forEach(s => { %><tr><td><%= s.issue_code.replaceAll('_', ' ').toLowerCase() %></td><td><span class="pill <%= s.severity === 'HIGH' ? 'bad' : s.severity === 'MEDIUM' ? 'warn' : 'muted' %>"><%= s.severity.toLowerCase() %></span></td><td class="num"><%= s.n %></td></tr><% }) %>
+</tbody></table><% } %>
+</div>
+<div class="card"><h2>Setup still on placeholder values</h2>
+<% if (!gaps.length) { %><div class="empty">All configuration confirmed.</div><% } else { %>
+<p class="small muted">These values were set up as starting points. Head Office should confirm or replace them<%= me.can_manage_config ? ' in Admin › Pick-lists & rules' : '' %>.</p>
+<table><thead><tr><th>Item</th><th>Unconfirmed</th></tr></thead><tbody>
+<% gaps.forEach(g => { %><tr><td><%= g.item.replaceAll('_', ' ').toLowerCase() %></td><td class="small"><%= g.codes %></td></tr><% }) %>
+</tbody></table><% } %>
+</div></div>
+<div class="card"><h2>Records to fix</h2>
+<% if (!rows.length) { %><div class="empty">Nothing to fix.</div><% } else { %>
+<div class="table-wrap"><table><thead><tr><th>Issue</th><th>Record</th><th>Branch</th><th>Detail</th></tr></thead><tbody>
+<% const link = (r) => r.entity === 'lead' ? '/leads/' + r.entity_id : r.entity === 'customer' ? '/customers/' + r.entity_id : r.entity === 'employee' ? '/admin/employees/' + encodeURIComponent(r.entity_id) : null; %>
+<% rows.forEach(r => { const h = link(r); %><tr><td><%= r.issue_code.replaceAll('_', ' ').toLowerCase() %></td>
+  <td><% if (h) { %><a href="<%= h %>"><%= r.entity %> <%= r.entity_id %></a><% } else { %><%= r.entity %> <%= r.entity_id %><% } %></td>
+  <td><%= r.branch_id ? L.branch[r.branch_id]?.name : '' %></td><td class="small"><%= r.detail || '' %></td></tr><% }) %>
+</tbody></table></div><% } %>
+</div>
+<%- include('../partials/footer') %>

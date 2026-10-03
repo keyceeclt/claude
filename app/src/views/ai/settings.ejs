@@ -1,0 +1,58 @@
+<%- include('../partials/header') %>
+<%- include('../admin/nav') %>
+<% const agentName = { LEAD_RESCUE: 'Lead Rescue', FOLLOWUP_WRITER: 'Follow-up Writer', DAILY_BRIEF: 'Daily brief' }; %>
+<p class="muted small">Agents suggest, people decide. They read your CRM data, write suggestions, message drafts and daily briefs,
+and (only if you allow it below) schedule a follow-up for the lead owner. They never change a lead's stage, record a sale,
+edit customers or send anything to a customer. Everything they do is logged here and can be undone.</p>
+
+<% if (!serviceReady) { %><div class="flash bad">The server has no AI key configured (ANTHROPIC_API_KEY), so agents cannot run yet. The rest of the CRM works as normal.</div><% } %>
+
+<div class="grid grid-2">
+<div class="card">
+  <h2>Settings for <%= company.name %></h2>
+  <form method="post" action="/ai/settings" class="stack">
+    <%- include('../partials/csrf') %>
+    <label class="inline"><input type="checkbox" name="enabled" value="yes" <%= company.ai_enabled ? 'checked' : '' %>> AI agents switched on</label>
+    <label>Monthly AI budget (USD) <input type="number" name="budget" min="0" step="1" value="<%= company.ai_monthly_budget_usd %>" required></label>
+    <label class="inline"><input type="checkbox" name="auto_schedule" value="yes" <%= company.ai_auto_schedule ? 'checked' : '' %>>
+      Lead Rescue may schedule follow-ups itself (for leads with none pending). Staff can undo each one.</label>
+    <p class="small muted">Agents stop for the month once the budget is used. Spent so far this month: <strong>$<%= spend.toFixed(2) %></strong> of $<%= Number(company.ai_monthly_budget_usd).toFixed(2) %>. Model: <%= model %>.</p>
+    <div><button class="btn">Save</button></div>
+  </form>
+</div>
+<div class="card">
+  <h2>Run now</h2>
+  <p class="small">Agents normally run on a schedule (see README). You can also run them now.</p>
+  <form method="post" action="/ai/run/rescue" class="actions"><%- include('../partials/csrf') %><button class="btn secondary">Run Lead Rescue</button>
+    <span class="small muted">Next steps for leads flagged as at risk</span></form>
+  <form method="post" action="/ai/run/brief" class="actions"><%- include('../partials/csrf') %><button class="btn secondary">Write today's brief</button>
+    <span class="small muted">One for the company and one per branch</span></form>
+  <p class="small muted">The Follow-up Writer runs from each lead's page ("Draft a message").</p>
+</div>
+</div>
+
+<div class="card"><h2>Are the suggestions used?</h2>
+<% if (!outcomes.length) { %><div class="empty">No suggestions yet.</div><% } else { %>
+<div class="table-wrap"><table><thead><tr><th>Month</th><th>Branch</th><th>Kind</th><th class="num">Suggested</th><th class="num">Accepted</th><th class="num">Auto-scheduled</th><th class="num">Dismissed</th><th class="num">Undone</th><th class="num">Still open</th><th class="num">Leads later won</th></tr></thead>
+<tbody><% outcomes.forEach(o => { %><tr><td><%= o.month.slice(0, 7) %></td><td><%= o.branch_name %></td><td><%= o.kind === 'FOLLOWUP' ? 'Next step' : 'Message draft' %></td>
+  <td class="num"><%= o.suggestions %></td><td class="num"><%= o.accepted %></td><td class="num"><%= o.auto_applied %></td><td class="num"><%= o.dismissed %></td><td class="num"><%= o.undone %></td><td class="num"><%= o.open %></td><td class="num"><%= o.leads_later_won %></td></tr><% }) %></tbody></table></div>
+<p class="small muted">"Leads later won" counts leads that are now Won after a suggestion; it shows association, not proof that the suggestion caused the sale.</p>
+<% } %>
+</div>
+
+<div class="card"><h2>AI usage</h2>
+<% if (!usage.length) { %><div class="empty">No agent runs yet.</div><% } else { %>
+<div class="table-wrap"><table><thead><tr><th>Month</th><th>Agent</th><th class="num">Runs</th><th class="num">Failed</th><th class="num">Skipped</th><th class="num">Items</th><th class="num">Tokens in / out</th><th class="num">Cost (USD)</th></tr></thead>
+<tbody><% usage.forEach(u => { %><tr><td><%= u.month.slice(0, 7) %></td><td><%= agentName[u.agent] || u.agent %></td><td class="num"><%= u.runs %></td><td class="num"><%= u.failed_runs %></td><td class="num"><%= u.skipped_runs %></td><td class="num"><%= u.items %></td><td class="num"><%= fmtNum(u.input_tokens) %> / <%= fmtNum(u.output_tokens) %></td><td class="num">$<%= Number(u.cost_usd).toFixed(2) %></td></tr><% }) %></tbody></table></div>
+<% } %>
+</div>
+
+<div class="card"><h2>Recent runs</h2>
+<% if (!runs.length) { %><div class="empty">No agent runs yet.</div><% } else { %>
+<div class="table-wrap"><table><thead><tr><th>Started</th><th>Agent</th><th>Status</th><th class="num">Items</th><th class="num">Cost</th><th class="hide-sm">By</th><th>Note</th></tr></thead>
+<tbody><% runs.forEach(r => { %><tr><td class="nowrap"><%= fmtDateTime(r.started_at) %></td><td><%= agentName[r.agent] || r.agent %></td>
+  <td><span class="pill <%= r.status === 'DONE' ? 'ok' : r.status === 'FAILED' ? 'bad' : r.status === 'SKIPPED' ? 'warn' : '' %>"><%= r.status.toLowerCase() %></span></td>
+  <td class="num"><%= r.items %></td><td class="num">$<%= Number(r.cost_usd).toFixed(3) %></td><td class="hide-sm"><%= r.requested_by_name || 'schedule' %></td><td class="small"><%= r.note || '' %></td></tr><% }) %></tbody></table></div>
+<% } %>
+</div>
+<%- include('../partials/footer') %>

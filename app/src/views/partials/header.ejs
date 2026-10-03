@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title><%= title %> · <%= me ? me.tenant_name : appName %></title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<% if (me) { %>
+<header class="topbar"><div class="topbar-inner">
+  <a class="brand" href="/"><%= me.tenant_name %></a>
+  <nav class="nav">
+    <% const on = (p) => (p === '/' ? path === '/' : path.startsWith(p)) ? 'on' : ''; %>
+    <a class="<%= on('/') %>" href="/">My Day</a>
+    <a class="<%= on('/leads') %>" href="/leads">Leads</a>
+    <a class="<%= on('/customers') %>" href="/customers">Customers</a>
+    <a class="<%= on('/visits') %>" href="/visits/new">Walk-in</a>
+    <a class="<%= on('/sales') %>" href="/sales">Sales</a>
+    <a class="<%= on('/campaigns') %>" href="/campaigns">Campaigns</a>
+    <a class="<%= on('/reports') %>" href="/reports/daily">Reports</a>
+    <% if (me.data_scope !== 'OWN') { %><a class="<%= on('/admin') %>" href="/admin/employees">Admin</a><% } %>
+  </nav>
+  <div class="who">
+    <span><%= me.employee_name %> · <%= me.branch_name || 'Head Office' %></span>
+    <form method="post" action="/logout"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button>Sign out</button></form>
+  </div>
+</div></header>
+<% } %>
+<main>
+<% if (msg) { %><div class="flash ok"><%= msg %></div><% } %>
+<% if (err) { %><div class="flash bad"><%= err %></div><% } %>

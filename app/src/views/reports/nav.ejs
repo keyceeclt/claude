@@ -1,0 +1,6 @@
+<div class="page-head"><h1><%= title %></h1>
+<nav class="actions">
+  <% [['/reports/daily','Daily MIS'],['/reports/funnel','Monthly funnel'],['/reports/staff','Staff'],['/campaigns','Campaigns'],['/reports/ageing','Pipeline ageing'],['/reports/data-quality','Data quality']].forEach(([h,t]) => { %>
+    <a class="btn small <%= path === h ? '' : 'secondary' %>" href="<%= h %>"><%= t %></a>
+  <% }) %>
+</nav></div>

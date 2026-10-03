@@ -1,0 +1,23 @@
+<%- include('../partials/header') %>
+<h1>Walk-in visit</h1>
+<div class="card">
+<p class="small muted">Record every walk-in, even if they don't buy today. Tick "open a lead" if they are interested so someone follows up.</p>
+<form method="post" action="/visits" class="stack">
+  <%- include('../partials/csrf') %>
+  <div class="fields">
+    <label>Mobile <input name="mobile" inputmode="tel" required></label>
+    <label>Name <input name="customer_name"></label>
+    <% if (me.data_scope === 'ALL') { %><label>Branch <select name="branch_id" required>
+      <% L.branches.filter(b => b.is_active).forEach(b => { %><option value="<%= b.branch_id %>"><%= b.name %></option><% }) %></select></label><% } %>
+    <label>Time (blank = now) <input type="datetime-local" name="visit_at"></label>
+    <label>Looking for <select name="product_category"><option value="">—</option><% L.active('PRODUCT_CATEGORY').forEach(v => { %><option value="<%= v.code %>"><%= v.label %></option><% }) %></select></label>
+    <label>Model / requirement <input name="product_interest"></label>
+    <label>Source if a lead is opened <select name="source_code">
+      <% L.sources.filter(s => s.is_active).forEach(s => { %><option value="<%= s.source_code %>" <%= s.source_code === 'WALK_IN' ? 'selected' : '' %>><%= s.source_name %></option><% }) %></select></label>
+  </div>
+  <label>Notes <textarea name="notes"></textarea></label>
+  <label class="inline"><input type="checkbox" name="create_lead" value="yes" checked> Interested: open a lead for follow-up</label>
+  <div><button class="btn">Save visit</button></div>
+</form>
+</div>
+<%- include('../partials/footer') %>

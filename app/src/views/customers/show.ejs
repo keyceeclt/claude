@@ -1,0 +1,47 @@
+<%- include('../partials/header') %>
+<% const c = customer; %>
+<div class="page-head"><h1><%= c.customer_name || 'No name' %> <span class="muted small"><%= c.mobile %></span></h1>
+  <a class="btn" href="/leads/new?mobile=<%= c.mobile %>">+ New lead</a></div>
+<div class="grid grid-2">
+  <div class="card">
+    <h2>Details</h2>
+    <form method="post" action="/customers/<%= c.customer_id %>" class="stack">
+      <%- include('../partials/csrf') %>
+      <div class="fields">
+        <label>Name <input name="customer_name" value="<%= c.customer_name || '' %>"></label>
+        <label>Alternate mobile <input name="alt_mobile" value="<%= c.alt_mobile || '' %>" inputmode="tel"></label>
+        <label>Email <input name="email" type="email" value="<%= c.email || '' %>"></label>
+        <label>Area <input name="area" value="<%= c.area || '' %>"></label>
+        <label>City <input name="city" value="<%= c.city || '' %>"></label>
+        <label>District <input name="district" value="<%= c.district || '' %>"></label>
+        <label>Segment <select name="segment"><option value="">—</option>
+          <% L.active('CUSTOMER_SEGMENT').forEach(v => { %><option value="<%= v.code %>" <%= c.segment === v.code ? 'selected' : '' %>><%= v.label %></option><% }) %></select></label>
+        <label>Marketing consent <select name="marketing_consent">
+          <option value="" <%= c.marketing_consent === null ? 'selected' : '' %>>Not asked</option>
+          <option value="yes" <%= c.marketing_consent === true ? 'selected' : '' %>>Yes</option>
+          <option value="no" <%= c.marketing_consent === false ? 'selected' : '' %>>No</option></select></label>
+      </div>
+      <div><button class="btn secondary">Save</button></div>
+    </form>
+  </div>
+  <div class="card">
+    <h2>Purchases</h2>
+    <% if (!sales.length) { %><div class="empty">No purchases recorded.</div><% } else { %>
+    <table><thead><tr><th>Date</th><th>Invoice</th><th>Branch</th><th class="num">Value</th></tr></thead><tbody>
+      <% sales.forEach(s => { %><tr><td><%= fmtDate(s.invoice_date) %></td><td><%= s.invoice_no %></td><td><%= L.branch[s.branch_id]?.name %></td><td class="num"><%= fmtMoney(s.net_value) %></td></tr><% }) %>
+    </tbody></table><% } %>
+    <h3>Store visits</h3>
+    <% if (!visits.length) { %><div class="empty">No visits recorded.</div><% } else { %>
+    <ul class="timeline"><% visits.forEach(v => { %><li><%= fmtDateTime(v.visit_at) %> · <%= L.branch[v.branch_id]?.name %><%= v.notes ? ' · ' + v.notes : '' %></li><% }) %></ul><% } %>
+  </div>
+</div>
+<div class="card">
+  <h2>Leads</h2>
+  <% if (!leads.length) { %><div class="empty">No leads.</div><% } else { %>
+  <div class="table-wrap"><table><thead><tr><th>#</th><th>Interest</th><th>Stage</th><th>Branch</th><th>Staff</th><th>Created</th></tr></thead><tbody>
+  <% leads.forEach(l => { %><tr><td><a href="/leads/<%= l.lead_id %>"><%= l.lead_id %></a></td><td><%= L.label('PRODUCT_CATEGORY', l.product_category) %></td>
+    <td><%- include('../partials/stage', { code: l.stage_code }) %></td><td><%= L.branch[l.branch_id]?.name %></td>
+    <td><%= L.employee[l.assigned_to]?.employee_name || '' %></td><td><%= fmtDate(l.created_at) %></td></tr><% }) %>
+  </tbody></table></div><% } %>
+</div>
+<%- include('../partials/footer') %>

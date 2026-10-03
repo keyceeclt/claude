@@ -1,0 +1,56 @@
+<%- include('../partials/header') %>
+<div class="page-head"><h1>Leads</h1><a class="btn" href="/leads/new">+ New lead</a></div>
+<form method="get" class="filters card">
+  <label>Search <input name="q" value="<%= f.q || '' %>" placeholder="Name or mobile"></label>
+  <label>Status <select name="status">
+    <% [['open','Open'],['closed','Closed'],['all','All']].forEach(([v,t]) => { %><option value="<%= v %>" <%= f.status === v ? 'selected' : '' %>><%= t %></option><% }) %>
+  </select></label>
+  <label>Stage <select name="stage"><option value="">Any</option>
+    <% L.stages.forEach(s => { %><option value="<%= s.code %>" <%= f.stage === s.code ? 'selected' : '' %>><%= s.label %></option><% }) %>
+  </select></label>
+  <label>Needs action <select name="attention"><option value="">Any</option>
+    <% [['any','Any flag'],['NOT_CONTACTED_WITHIN_SLA','Not contacted in time'],['FOLLOWUP_OVERDUE','Follow-up overdue'],['NO_NEXT_FOLLOWUP','No next follow-up'],['STALE','Stale']].forEach(([v,t]) => { %><option value="<%= v %>" <%= f.attention === v ? 'selected' : '' %>><%= t %></option><% }) %>
+  </select></label>
+  <label>Source <select name="source"><option value="">Any</option>
+    <% L.sources.forEach(s => { %><option value="<%= s.source_code %>" <%= f.source === s.source_code ? 'selected' : '' %>><%= s.source_name %></option><% }) %>
+  </select></label>
+  <% if (me.data_scope === 'ALL') { %>
+  <label>Branch <select name="branch"><option value="">All</option>
+    <% L.branches.forEach(b => { %><option value="<%= b.branch_id %>" <%= String(f.branch) === String(b.branch_id) ? 'selected' : '' %>><%= b.name %></option><% }) %>
+  </select></label>
+  <% } %>
+  <% if (me.data_scope !== 'OWN') { %>
+  <label>Staff <select name="owner"><option value="">Anyone</option>
+    <% L.employees.forEach(e => { %><option value="<%= e.employee_id %>" <%= f.owner === e.employee_id ? 'selected' : '' %>><%= e.employee_name %></option><% }) %>
+  </select></label>
+  <% } %>
+  <button class="btn">Filter</button>
+</form>
+<div class="card">
+<% if (!rows.length) { %><div class="empty">No leads match these filters.</div><% } else { %>
+<div class="table-wrap"><table>
+  <thead><tr><th>#</th><th>Customer</th><th>Interest</th><th>Stage</th><th>Needs action</th><th class="hide-sm">Source</th><th class="hide-sm">Branch</th><th class="hide-sm">Staff</th><th class="hide-sm">Created</th><th class="num">Next follow-up</th></tr></thead>
+  <tbody>
+  <% rows.forEach(l => { %>
+    <tr>
+      <td><a href="/leads/<%= l.lead_id %>"><%= l.lead_id %></a></td>
+      <td><a href="/leads/<%= l.lead_id %>"><%= l.customer_name || 'No name' %></a><div class="small muted"><%= l.mobile %></div></td>
+      <td><%= L.label('PRODUCT_CATEGORY', l.product_category) %></td>
+      <td><%- include('../partials/stage', { code: l.stage_code }) %></td>
+      <td><%- include('../partials/attention', { code: l.attention_reason }) %></td>
+      <td class="hide-sm"><%= L.source[l.source_code]?.source_name || l.source_code %></td>
+      <td class="hide-sm"><%= L.branch[l.branch_id]?.name %></td>
+      <td class="hide-sm"><%= L.employee[l.assigned_to]?.employee_name || 'Unassigned' %></td>
+      <td class="hide-sm nowrap"><%= fmtDate(l.created_at) %></td>
+      <td class="num"><%= fmtDateTime(l.next_followup_at) %></td>
+    </tr>
+  <% }) %>
+  </tbody></table></div>
+<% } %>
+<div class="actions">
+  <% const qs = (p) => { const u = new URLSearchParams(Object.entries(f).filter(([k, v]) => v && k !== 'page')); u.set('page', p); return '?' + u; }; %>
+  <% if (f.page > 1) { %><a class="btn small secondary" href="<%= qs(f.page - 1) %>">‹ Previous</a><% } %>
+  <% if (more) { %><a class="btn small secondary" href="<%= qs(f.page + 1) %>">Next ›</a><% } %>
+</div>
+</div>
+<%- include('../partials/footer') %>

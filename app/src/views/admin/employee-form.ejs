@@ -1,0 +1,55 @@
+<%- include('../partials/header') %>
+<%- include('nav') %>
+<% const isNew = !e.employee_id; const ro = !me.can_manage_config; %>
+<div class="card">
+<form method="post" action="<%= isNew ? '/admin/employees' : '/admin/employees/' + encodeURIComponent(e.employee_id) %>" class="stack">
+  <%- include('../partials/csrf') %>
+  <fieldset <%= ro ? 'disabled' : '' %> class="fields">
+    <label>Employee ID <input name="employee_id" value="<%= e.employee_id || '' %>" <%= isNew ? 'required' : 'readonly' %>></label>
+    <label>Name <input name="employee_name" value="<%= e.employee_name || '' %>" required></label>
+    <label>Branch <select name="branch_id"><option value="">Head Office</option>
+      <% L.branches.forEach(b => { %><option value="<%= b.branch_id %>" <%= e.branch_id === b.branch_id ? 'selected' : '' %>><%= b.name %></option><% }) %></select></label>
+    <label>Designation <select name="designation"><option value="">—</option>
+      <% (L.list.DESIGNATION || []).forEach(v => { %><option value="<%= v.code %>" <%= e.designation === v.code ? 'selected' : '' %>><%= v.label %></option><% }) %></select></label>
+    <label>Department <select name="department"><option value="">—</option>
+      <% (L.list.DEPARTMENT || []).forEach(v => { %><option value="<%= v.code %>" <%= e.department === v.code ? 'selected' : '' %>><%= v.label %></option><% }) %></select></label>
+    <label>Status <select name="status" required>
+      <% (L.list.EMPLOYEE_STATUS || []).forEach(v => { %><option value="<%= v.code %>" <%= e.status === v.code ? 'selected' : '' %>><%= v.label %></option><% }) %></select></label>
+    <label>CRM access level <select name="crm_access_level" required>
+      <% L.assignableLevels.forEach(a => { %><option value="<%= a.code %>" <%= e.crm_access_level === a.code ? 'selected' : '' %>><%= a.label %> (sees <%= a.data_scope === 'ALL' ? 'all branches' : a.data_scope === 'BRANCH' ? 'own branch' : 'own leads' %>)</option><% }) %></select></label>
+    <label>Reports to <select name="reporting_manager_id"><option value="">—</option>
+      <% L.employees.filter(x => x.is_active && x.employee_id !== e.employee_id).forEach(x => { %><option value="<%= x.employee_id %>" <%= e.reporting_manager_id === x.employee_id ? 'selected' : '' %>><%= x.employee_name %></option><% }) %></select></label>
+    <label>Joining date <input type="date" name="joining_date" value="<%= e.joining_date || '' %>"></label>
+    <label>Exit date <input type="date" name="exit_date" value="<%= e.exit_date || '' %>"></label>
+    <label>Mobile <input name="mobile" value="<%= e.mobile || '' %>" inputmode="tel"></label>
+    <label>Login email <input type="email" name="login_email" value="<%= e.login_email || '' %>"></label>
+  </fieldset>
+  <% if (!ro) { %><div><button class="btn"><%= isNew ? 'Add staff member' : 'Save' %></button></div><% } %>
+  <p class="small muted">Setting an exit date removes their access from that day. Their past leads and sales stay attributed to them; reassign their open leads.</p>
+</form>
+</div>
+<% if (!isNew && !ro) { %>
+<div class="grid grid-2">
+<div class="card"><h2>Login</h2>
+  <p class="small muted"><%= hasLogin ? 'Has a login. Setting a new temporary password forces a change at next sign-in.' : 'No login yet.' %></p>
+  <form method="post" action="/admin/employees/<%= encodeURIComponent(e.employee_id) %>/login" class="actions">
+    <%- include('../partials/csrf') %>
+    <input type="text" name="password" minlength="10" placeholder="Temporary password (10+)" autocomplete="off" required aria-label="Temporary password">
+    <button class="btn secondary small"><%= hasLogin ? 'Reset password' : 'Create login' %></button>
+  </form>
+</div>
+<div class="card"><h2>Monthly targets</h2>
+  <form method="post" action="/admin/employees/<%= encodeURIComponent(e.employee_id) %>/target" class="actions">
+    <%- include('../partials/csrf') %>
+    <input type="month" name="month" value="<%= today().slice(0, 7) %>" aria-label="Month">
+    <select name="target_type" aria-label="Target type"><option value="SALES_VALUE">Sales value <%= currencySymbol %></option><option value="SALES_COUNT">Invoices</option><option value="LEADS_WON">Leads won</option><option value="STORE_VISITS">Store visits</option></select>
+    <input type="number" name="target_value" min="0" required placeholder="Target" aria-label="Target value">
+    <button class="btn secondary small">Save target</button>
+  </form>
+  <% if (targets.length) { %><table><thead><tr><th>Month</th><th>Measure</th><th class="num">Target</th></tr></thead><tbody>
+    <% targets.forEach(t => { %><tr><td><%= t.period_start.slice(0, 7) %></td><td><%= t.target_type.replace('_', ' ').toLowerCase() %></td><td class="num"><%= t.target_type === 'SALES_VALUE' ? fmtMoney(t.target_value) : fmtNum(t.target_value) %></td></tr><% }) %>
+  </tbody></table><% } %>
+</div>
+</div>
+<% } %>
+<%- include('../partials/footer') %>

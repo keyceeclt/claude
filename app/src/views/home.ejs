@@ -1,0 +1,95 @@
+<%- include('partials/header') %>
+<% const overdue = followups.filter(f => f.followup_status === 'OVERDUE');
+   const dueToday = followups.filter(f => f.followup_status !== 'OVERDUE');
+   const notContacted = attentionLeads.filter(l => l.attention_reason === 'NOT_CONTACTED_WITHIN_SLA');
+   const noNext = attentionLeads.filter(l => l.attention_reason === 'NO_NEXT_FOLLOWUP');
+   const stale = attentionLeads.filter(l => l.attention_reason === 'STALE');
+   const team = me.data_scope !== 'OWN'; %>
+<div class="page-head">
+  <h1>My Day</h1>
+  <div class="actions">
+    <% if (team) { %>
+    <form method="get" action="/" class="actions">
+      <select name="owner" aria-label="Staff">
+        <option value="">Whole <%= me.data_scope === 'ALL' ? 'company' : 'branch' %></option>
+        <% L.employees.filter(e => e.is_active).forEach(e => { %><option value="<%= e.employee_id %>" <%= owner === e.employee_id ? 'selected' : '' %>><%= e.employee_name %></option><% }) %>
+      </select>
+      <button class="btn secondary small">Show</button>
+    </form>
+    <% } %>
+    <a class="btn" href="/leads/new">+ New lead</a>
+  </div>
+</div>
+
+<div class="tiles">
+  <div class="tile <%= overdue.length ? 'bad' : 'ok' %>"><div class="k">Overdue follow-ups</div><div class="v"><%= overdue.length %></div></div>
+  <div class="tile"><div class="k">Due today</div><div class="v"><%= dueToday.length %></div></div>
+  <div class="tile <%= notContacted.length ? 'bad' : 'ok' %>"><div class="k">Not contacted in time</div><div class="v"><%= notContacted.length %></div></div>
+  <div class="tile <%= noNext.length ? 'warn' : 'ok' %>"><div class="k">No next follow-up</div><div class="v"><%= noNext.length %></div></div>
+  <div class="tile"><div class="k">Sales today</div><div class="v"><%= fmtMoney(today.sales_value) %></div><div class="small muted"><%= today.sales_count %> invoices</div></div>
+  <div class="tile"><div class="k">Sales this month</div><div class="v"><%= fmtMoney(month.sales_value) %></div>
+    <% if (month.target_sales_value) { %><progress max="<%= month.target_sales_value %>" value="<%= Math.min(month.sales_value, month.target_sales_value) %>"></progress><div class="small muted"><%= fmtPct(100 * month.sales_value / month.target_sales_value) %> of <%= fmtMoney(month.target_sales_value) %></div><% } else { %><div class="small muted">No target set</div><% } %>
+  </div>
+</div>
+
+<% if (brief) { %>
+<section class="card"><h2>Daily brief · <%= fmtDate(brief.brief_date) %> <span class="pill">AI</span></h2>
+  <p><strong><%= brief.body %></strong></p>
+  <ul class="brief-points"><% brief.points.forEach(p => { %><li><span class="pill <%= p.kind === 'URGENT' || p.kind === 'LEAK' ? 'bad' : p.kind === 'WIN' ? 'ok' : '' %>"><%= p.kind.toLowerCase() %></span> <%= p.text %><% if (p.owner) { %> <span class="small muted">· <%= p.owner %></span><% } %></li><% }) %></ul>
+  <% if (brief.unverified_numbers.length) { %><p class="small flash bad">Check before acting: these numbers are not in the CRM figures the brief was written from: <%= brief.unverified_numbers.join(', ') %>.</p><% } %>
+  <p class="small muted">Written by AI from the CRM's own figures for <%= brief.facts.scope %>. Reports have the full numbers.</p>
+</section>
+<% } %>
+<% if (suggestions.length) { %>
+<section class="card"><h2>AI suggested next steps</h2>
+  <p class="small muted">For leads at risk of being lost. Schedule the ones that make sense, dismiss the rest.</p>
+  <ul class="suggestions"><% suggestions.forEach(s => { %><%- include('partials/suggestion', { s, L, back: '/', showLead: true }) %><% }) %></ul>
+</section>
+<% } %>
+
+<% const fuTable = (all, empty, more) => { const rows = all.slice(0, 15); %>
+  <% if (!rows.length) { %><div class="empty"><%= empty %></div><% } else { %>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Due</th><th>Customer</th><th class="hide-sm">Interest</th><th class="hide-sm">Stage</th><% if (team) { %><th class="hide-sm">Staff</th><% } %><th></th></tr></thead>
+    <tbody>
+    <% rows.forEach(f => { %>
+      <tr>
+        <td class="nowrap"><%= fmtDateTime(f.due_at) %></td>
+        <td><a href="/leads/<%= f.lead_id %>"><%= f.customer_name || 'No name' %></a><div class="small muted"><%= f.mobile %></div></td>
+        <td class="hide-sm"><%= L.label('PRODUCT_CATEGORY', f.product_category) %></td>
+        <td class="hide-sm"><%- include('partials/stage', { code: f.stage_code }) %></td>
+        <% if (team) { %><td class="hide-sm"><%= L.employee[f.employee_id]?.employee_name || f.employee_id %></td><% } %>
+        <td><a class="btn small secondary" href="/leads/<%= f.lead_id %>#log">Log call</a></td>
+      </tr>
+    <% }) %>
+    </tbody></table></div>
+    <% if (all.length > rows.length) { %><p><a href="<%= more %>">Show all <%= all.length %> ›</a></p><% } %>
+  <% } %>
+<% } %>
+
+<% const leadTable = (all, empty, more) => { const rows = all.slice(0, 15); %>
+  <% if (!rows.length) { %><div class="empty"><%= empty %></div><% } else { %>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Customer</th><th class="hide-sm">Interest</th><th class="hide-sm">Stage</th><th class="hide-sm">Created</th><% if (team) { %><th class="hide-sm">Staff</th><% } %><th></th></tr></thead>
+    <tbody>
+    <% rows.forEach(l => { %>
+      <tr>
+        <td><a href="/leads/<%= l.lead_id %>"><%= l.customer_name || 'No name' %></a><div class="small muted"><%= l.mobile %></div></td>
+        <td class="hide-sm"><%= L.label('PRODUCT_CATEGORY', l.product_category) %></td>
+        <td class="hide-sm"><%- include('partials/stage', { code: l.stage_code }) %></td>
+        <td class="hide-sm nowrap"><%= fmtDateTime(l.created_at) %></td>
+        <% if (team) { %><td class="hide-sm"><%= L.employee[l.assigned_to]?.employee_name || 'Unassigned' %></td><% } %>
+        <td><a class="btn small secondary" href="/leads/<%= l.lead_id %>#log">Open</a></td>
+      </tr>
+    <% }) %>
+    </tbody></table></div>
+    <% if (all.length > rows.length) { %><p><a href="<%= more %>">Show all <%= all.length %> ›</a></p><% } %>
+  <% } %>
+<% } %>
+
+<section class="card"><h2>1 · Overdue follow-ups</h2><% fuTable(overdue, 'No overdue follow-ups. Well done.', '/leads?attention=FOLLOWUP_OVERDUE' + (owner ? '&owner=' + encodeURIComponent(owner) : '')) %></section>
+<section class="card"><h2>2 · New leads not contacted in time</h2><% leadTable(notContacted, 'Every new lead has been reached.', '/leads?attention=NOT_CONTACTED_WITHIN_SLA' + (owner ? '&owner=' + encodeURIComponent(owner) : '')) %></section>
+<section class="card"><h2>3 · Due today</h2><% fuTable(dueToday, 'Nothing else due today.', '/leads') %></section>
+<section class="card"><h2>4 · Open leads with no next follow-up</h2><p class="small muted">Every open lead needs a next step, or it will be forgotten. Schedule one or close the lead.</p><% leadTable(noNext, 'All open leads have a next follow-up.', '/leads?attention=NO_NEXT_FOLLOWUP' + (owner ? '&owner=' + encodeURIComponent(owner) : '')) %></section>
+<% if (stale.length) { %><section class="card"><h2>5 · Stale leads</h2><% leadTable(stale, '', '/leads?attention=STALE' + (owner ? '&owner=' + encodeURIComponent(owner) : '')) %></section><% } %>
+<%- include('partials/footer') %>

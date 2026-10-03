@@ -1,0 +1,183 @@
+<%- include('../partials/header') %>
+<% const l = lead; const closed = l.is_closed;
+   const lostStages = L.stages.filter(s => s.is_lost).map(s => s.code).join(','); %>
+<div class="page-head">
+  <div>
+    <h1><%= l.customer_name || 'No name' %> <span class="muted small">Lead #<%= l.lead_id %></span></h1>
+    <div class="actions"><%- include('../partials/stage', { code: l.stage_code }) %> <%- include('../partials/attention', { code: l.attention_reason }) %>
+      <a href="tel:+<%= me.phone_prefix %><%= l.mobile %>" class="btn small secondary">Call <%= l.mobile %></a>
+      <a href="https://wa.me/<%= me.phone_prefix %><%= l.mobile %>" class="btn small secondary" rel="noopener" target="_blank">WhatsApp</a>
+    </div>
+  </div>
+  <% if (me.data_scope !== 'OWN' && !l.is_won) { %><a class="btn" href="/sales/new?lead_id=<%= l.lead_id %>">Record sale</a><% } %>
+</div>
+
+<div class="grid grid-2">
+  <div class="card">
+    <h2>Lead</h2>
+    <dl class="kv">
+      <dt>Interest</dt><dd><%= L.label('PRODUCT_CATEGORY', l.product_category) %><%= l.product_interest ? ' · ' + l.product_interest : '' %></dd>
+      <dt>Budget</dt><dd><%= fmtMoney(l.budget_value) %></dd>
+      <dt>Expected purchase</dt><dd><%= fmtDate(l.expected_purchase_on) %></dd>
+      <dt>Source</dt><dd><%= L.source[l.source_code]?.source_name || l.source_code %></dd>
+      <dt>Campaign</dt><dd><%= L.campaigns.find(c => c.campaign_id == l.campaign_id)?.campaign_name || '—' %></dd>
+      <dt>Branch</dt><dd><%= L.branch[l.branch_id]?.name %></dd>
+      <dt>Assigned to</dt><dd><%= L.employee[l.assigned_to]?.employee_name || 'Unassigned' %></dd>
+      <dt>Created</dt><dd><%= fmtDateTime(l.created_at) %> (<%= l.age_days %> days ago)</dd>
+      <dt>First contact</dt><dd><%= l.first_contact_at ? fmtDateTime(l.first_contact_at) + ' · ' + l.first_contact_hours + ' h' : 'Not yet reached' %></dd>
+      <dt>Next follow-up</dt><dd><%= fmtDateTime(l.next_followup_at) %></dd>
+      <% if (l.lost_reason) { %><dt>Lost reason</dt><dd><%= L.label('LOST_REASON', l.lost_reason) %></dd><% } %>
+      <% if (l.is_won) { %><dt>Won value</dt><dd><%= fmtMoney(l.won_value) %></dd><% } %>
+    </dl>
+  </div>
+  <div class="card">
+    <h2>Customer</h2>
+    <dl class="kv">
+      <dt>Mobile</dt><dd><%= l.mobile %><%= l.alt_mobile ? ' / ' + l.alt_mobile : '' %></dd>
+      <dt>Area</dt><dd><%= l.area || '—' %></dd>
+      <dt>Email</dt><dd><%= l.email || '—' %></dd>
+      <dt>Segment</dt><dd><%= L.label('CUSTOMER_SEGMENT', l.segment) %></dd>
+    </dl>
+    <p><a href="/customers/<%= l.customer_id %>">Full customer history and edit ›</a></p>
+    <% if (otherLeads.length) { %><p class="small muted">Other leads for this customer:
+      <% otherLeads.forEach(o => { %><a href="/leads/<%= o.lead_id %>">#<%= o.lead_id %></a> (<%= L.stage[o.stage_code]?.label || o.stage_code %>) <% }) %></p><% } %>
+  </div>
+</div>
+
+<% const nextSteps = suggestions.filter(x => x.kind === 'FOLLOWUP');
+   const drafts = suggestions.filter(x => x.kind === 'MESSAGE' && x.status === 'OPEN'); %>
+<% if (aiOn || suggestions.length) { %>
+<div class="card" id="ai">
+  <h2>AI assistant</h2>
+  <% if (nextSteps.length) { %>
+    <h3>Suggested next steps</h3>
+    <ul class="suggestions"><% nextSteps.slice(0, 3).forEach(s => { %><%- include('../partials/suggestion', { s, L, back: '/leads/' + l.lead_id, showLead: false }) %><% }) %></ul>
+  <% } %>
+  <% drafts.forEach(d => { %>
+    <h3>Message draft</h3>
+    <textarea id="draft-<%= d.suggestion_id %>" class="draft" rows="5" aria-label="Message draft"><%= d.message %></textarea>
+    <p class="small muted">Tip: <%= d.reason %> · Check the facts before sending; the AI only knows what is in the CRM.</p>
+    <div class="actions">
+      <a class="btn small" data-wa-from="draft-<%= d.suggestion_id %>" href="https://wa.me/<%= me.phone_prefix %><%= l.mobile %>?text=<%= encodeURIComponent(d.message) %>" target="_blank" rel="noopener">Open in WhatsApp</a>
+      <form method="post" action="/ai/suggestions/<%= d.suggestion_id %>/used"><%- include('../partials/csrf') %><input type="hidden" name="back" value="/leads/<%= l.lead_id %>"><button class="btn small secondary">Mark as sent</button></form>
+      <form method="post" action="/ai/suggestions/<%= d.suggestion_id %>/dismiss"><%- include('../partials/csrf') %><input type="hidden" name="back" value="/leads/<%= l.lead_id %>"><button class="btn small secondary">Discard</button></form>
+    </div>
+  <% }) %>
+  <% if (aiOn && !closed && me.can_write) { %>
+    <form method="post" action="/ai/leads/<%= l.lead_id %>/draft" class="actions">
+      <%- include('../partials/csrf') %>
+      <select name="language" aria-label="Language"><% LANGUAGES.forEach(x => { %><option><%= x %></option><% }) %></select>
+      <input name="goal" maxlength="300" placeholder="Aim (optional), e.g. invite for a demo this weekend" aria-label="Aim of the message">
+      <button class="btn small secondary">Draft a message</button>
+    </form>
+    <p class="small muted">Drafts take a few seconds. Nothing is sent until you send it yourself.</p>
+  <% } %>
+</div>
+<% } %>
+
+<% if (!closed) { %>
+<div class="card" id="log">
+  <h2>Log a call or contact</h2>
+  <form method="post" action="/leads/<%= l.lead_id %>/activity" class="stack">
+    <%- include('../partials/csrf') %>
+    <div class="fields">
+      <label>How <select name="activity_type"><% L.active('ACTIVITY_TYPE').forEach(v => { %><option value="<%= v.code %>"><%= v.label %></option><% }) %></select></label>
+      <label>Outcome <select name="outcome" required><option value="">Choose</option>
+        <% L.outcomes.filter(o => o.is_active).forEach(o => { %><option value="<%= o.code %>"><%= o.label %></option><% }) %>
+      </select></label>
+      <label>Next follow-up <input type="datetime-local" name="next_followup_at"></label>
+      <label>Next follow-up by <select name="next_type"><% L.active('ACTIVITY_TYPE').forEach(v => { %><option value="<%= v.code %>"><%= v.label %></option><% }) %></select></label>
+    </div>
+    <label>What was discussed <textarea name="notes"></textarea></label>
+    <p class="small muted">Saving completes the pending follow-up (if any). Always set the next follow-up unless you close the lead below.</p>
+    <div><button class="btn">Save</button></div>
+  </form>
+</div>
+<% } %>
+
+<div class="grid grid-2">
+  <% if (!closed) { %>
+  <div class="card">
+    <h2>Change stage</h2>
+    <form method="post" action="/leads/<%= l.lead_id %>/stage" class="stack">
+      <%- include('../partials/csrf') %>
+      <label>Stage <select name="stage_code" data-lost-stages="<%= lostStages %>" data-target="lost-<%= l.lead_id %>">
+        <% L.stages.filter(s => s.is_active && !s.is_won).forEach(s => { %><option value="<%= s.code %>" <%= s.code === l.stage_code ? 'selected' : '' %>><%= s.label %></option><% }) %>
+      </select></label>
+      <label id="lost-<%= l.lead_id %>">Lost reason <select name="lost_reason"><option value="">Choose</option>
+        <% L.active('LOST_REASON').forEach(v => { %><option value="<%= v.code %>"><%= v.label %></option><% }) %>
+      </select></label>
+      <p class="small muted">"Won" is set automatically when a sale is recorded against this lead.</p>
+      <div><button class="btn secondary">Update stage</button></div>
+    </form>
+    <% if (me.data_scope !== 'OWN') { %>
+    <h3>Reassign</h3>
+    <form method="post" action="/leads/<%= l.lead_id %>/assign" class="actions">
+      <%- include('../partials/csrf') %>
+      <select name="assigned_to" aria-label="Assign to">
+        <% L.employees.filter(e => e.is_active && e.branch_id === l.branch_id).forEach(e => { %><option value="<%= e.employee_id %>" <%= e.employee_id === l.assigned_to ? 'selected' : '' %>><%= e.employee_name %></option><% }) %>
+      </select>
+      <button class="btn secondary small">Reassign</button>
+    </form>
+    <% } %>
+  </div>
+  <% } %>
+  <div class="card">
+    <h2>Store visit &amp; quotation</h2>
+    <form method="post" action="/leads/<%= l.lead_id %>/visit" class="actions">
+      <%- include('../partials/csrf') %>
+      <input type="datetime-local" name="visit_at" aria-label="Visit time (blank = now)">
+      <input name="notes" placeholder="Visit notes" aria-label="Visit notes">
+      <button class="btn secondary small">Record visit</button>
+    </form>
+    <h3>Quotation</h3>
+    <form method="post" action="/leads/<%= l.lead_id %>/quotation" class="stack">
+      <%- include('../partials/csrf') %>
+      <div class="fields">
+        <label>Quotation no. <input name="quotation_no"></label>
+        <label>Value (<%= currencySymbol %>) <input name="total_value" type="number" min="0" step="1" required></label>
+        <label>Valid until <input name="valid_until" type="date"></label>
+      </div>
+      <div><button class="btn secondary small">Record quotation</button></div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <h2>History</h2>
+  <ul class="timeline">
+    <% const events = [
+         ...activities.map(a => ({ at: a.completed_at || a.due_at, kind: 'activity', a })),
+         ...visits.map(v => ({ at: v.visit_at, kind: 'visit', v })),
+         ...quotations.map(q => ({ at: q.created_at, kind: 'quote', q })),
+         ...sales.map(s => ({ at: s.created_at, kind: 'sale', s })),
+         ...history.map(h => ({ at: h.changed_at, kind: 'stage', h })),
+       ].sort((x, y) => new Date(y.at) - new Date(x.at)); %>
+    <% if (!events.length) { %><li class="muted">Nothing yet.</li><% } %>
+    <% events.forEach(e => { %>
+      <li>
+        <span class="small muted nowrap"><%= fmtDateTime(e.at) %></span> ·
+        <% if (e.kind === 'activity') { const a = e.a; %>
+          <% if (a.completed_at) { %>
+            <strong><%= L.label('ACTIVITY_TYPE', a.activity_type) %></strong>: <%= L.outcome[a.outcome]?.label || a.outcome %>
+            <% if (a.due_at) { %><span class="pill <%= a.followup_status === 'ON_TIME' ? 'ok' : 'warn' %>"><%= a.followup_status === 'ON_TIME' ? 'on time' : 'late' %></span><% } %>
+          <% } else { %>
+            <strong>Follow-up due</strong> (<%= L.label('ACTIVITY_TYPE', a.activity_type) %>)
+            <% if (a.followup_status === 'OVERDUE') { %><span class="pill bad">overdue</span><% } %>
+          <% } %>
+          · <%= L.employee[a.employee_id]?.employee_name || a.employee_id %><% if (a.origin === 'AGENT') { %> <span class="pill">scheduled by AI</span><% } %>
+          <% if (a.notes) { %><div><%= a.notes %></div><% } %>
+        <% } else if (e.kind === 'visit') { %>
+          <strong>Store visit</strong> · <%= L.employee[e.v.attended_by]?.employee_name || '' %><% if (e.v.notes) { %><div><%= e.v.notes %></div><% } %>
+        <% } else if (e.kind === 'quote') { %>
+          <strong>Quotation</strong> <%= e.q.quotation_no || '' %> · <%= fmtMoney(e.q.total_value) %> · <%= e.q.status.toLowerCase() %>
+        <% } else if (e.kind === 'sale') { %>
+          <strong>Sale</strong> invoice <%= e.s.invoice_no %> · <%= fmtMoney(e.s.net_value) %>
+        <% } else { %>
+          Stage → <strong><%= L.stage[e.h.to_stage]?.label || e.h.to_stage %></strong><%= e.h.changed_by ? ' · ' + (L.employee[e.h.changed_by]?.employee_name || e.h.changed_by) : '' %>
+        <% } %>
+      </li>
+    <% }) %>
+  </ul>
+</div>
+<%- include('../partials/footer') %>

@@ -1,0 +1,32 @@
+<%- include('../partials/header') %>
+<%- include('nav') %>
+<div class="card">
+<p class="small muted">Paste CSV (first row = column names) or choose a file. "Check" validates every row without saving. "Import" saves only if every row passes.</p>
+<form method="post" action="/admin/import" class="stack">
+  <%- include('../partials/csrf') %>
+  <div class="fields">
+    <label>Type <select name="type"><option value="leads" <%= type === 'leads' ? 'selected' : '' %>>Leads</option><option value="sales" <%= type === 'sales' ? 'selected' : '' %>>Sales (billing export)</option></select></label>
+    <label>CSV file <input type="file" accept=".csv,text/csv" data-into="csv-text"></label>
+  </div>
+  <label>CSV <textarea id="csv-text" name="csv" rows="10"><%= csv %></textarea></label>
+  <div class="actions"><button class="btn secondary" name="mode" value="check">Check</button><button class="btn" name="mode" value="import">Import</button></div>
+</form>
+</div>
+<% if (result) { %>
+<div class="card">
+  <% if (result.missing.length) { %><div class="flash bad">Missing columns: <%= result.missing.join(', ') %></div>
+  <% } else if (!result.total) { %><div class="flash warn">No data rows found.</div>
+  <% } else if (result.saved) { %><div class="flash ok">Imported <%= result.ok %> rows.</div>
+  <% } else if (result.errors.length) { %><div class="flash bad"><%= result.errors.length %> of <%= result.total %> rows have problems. Nothing was saved. Fix them and check again.</div>
+  <% } else { %><div class="flash ok">All <%= result.total %> rows are valid. Click Import to save.</div><% } %>
+  <% if (result.errors.length) { %><table><thead><tr><th>Line</th><th>Problem</th></tr></thead><tbody>
+    <% result.errors.slice(0, 200).forEach(e => { %><tr><td><%= e.line %></td><td><%= e.message %></td></tr><% }) %></tbody></table><% } %>
+</div>
+<% } %>
+<div class="grid grid-2">
+<% Object.entries(IMPORTS).forEach(([k, cols]) => { %>
+<div class="card"><h3><%= k === 'leads' ? 'Leads' : 'Sales' %> columns</h3><code class="small"><%= cols.join(',') %></code>
+<p class="small muted"><%= k === 'leads' ? 'branch_code: HILITE, MOBILE_PLAZA or APPAS. assigned_to: Employee ID. source_code / product_category: codes from Pick-lists. created_at optional (original enquiry date). notes becomes a follow-up due now.' : 'branch_code as above. invoice_date YYYY-MM-DD. lead_id links the sale to a CRM lead (marks it Won). customer_mobile optional for counter sales.' %></p></div>
+<% }) %>
+</div>
+<%- include('../partials/footer') %>

@@ -1,0 +1,25 @@
+<%- include('../partials/header') %>
+<%- include('nav') %>
+<p class="muted small">Leads are grouped by the month they were created. Conversion = won ÷ qualified leads (junk excluded). Recent months keep improving as open leads close.</p>
+<div class="card"><h2>Branch funnel</h2>
+<% if (!rows.length) { %><div class="empty">No leads in the last 6 months.</div><% } else { %>
+<div class="table-wrap"><table>
+  <thead><tr><th>Month</th><th>Branch</th><th class="num">Leads</th><th class="num">Junk</th><th class="num">Qualified</th><th class="num">Contacted</th><th class="num">Visited</th><th class="num">Quoted</th><th class="num">Won</th><th class="num">Lost</th><th class="num">Open</th><th class="num">Conv.</th><th class="num">Won <%= currencySymbol %></th><th class="num">Median 1st contact</th></tr></thead>
+  <tbody><% rows.forEach(r => { %><tr><td class="nowrap"><%= r.month.slice(0, 7) %></td><td><%= L.branch[r.branch_id]?.name %></td>
+    <td class="num"><%= r.leads %></td><td class="num"><%= r.junk_leads %></td><td class="num"><%= r.qualified_leads %></td><td class="num"><%= r.contacted %></td>
+    <td class="num"><%= r.visited %></td><td class="num"><%= r.quoted %></td><td class="num"><strong><%= r.won %></strong></td><td class="num"><%= r.lost %></td><td class="num"><%= r.still_open %></td>
+    <td class="num"><strong><%= fmtPct(r.conversion_pct) %></strong></td><td class="num"><%= fmtMoney(r.won_value) %></td>
+    <td class="num"><%= r.median_first_contact_hours == null ? '—' : Number(r.median_first_contact_hours).toFixed(1) + ' h' %></td></tr><% }) %></tbody>
+</table></div><% } %>
+</div>
+<div class="card"><h2>By lead source (last 3 months)</h2>
+<% if (!sources.length) { %><div class="empty">No data.</div><% } else { %>
+<div class="table-wrap"><table>
+  <thead><tr><th>Month</th><th>Branch</th><th>Source</th><th class="num">Leads</th><th class="num">Qualified</th><th class="num">Won</th><th class="num">Conv.</th><th class="num">Won <%= currencySymbol %></th></tr></thead>
+  <tbody><% sources.forEach(r => { %><tr><td><%= r.month.slice(0, 7) %></td><td><%= L.branch[r.branch_id]?.name %></td>
+    <td><%= L.source[r.source_code]?.source_name || r.source_code %><%= r.is_paid ? ' (paid)' : '' %></td><td class="num"><%= r.leads %></td><td class="num"><%= r.qualified_leads %></td>
+    <td class="num"><%= r.won %></td><td class="num"><%= fmtPct(r.conversion_pct) %></td><td class="num"><%= fmtMoney(r.won_value) %></td></tr><% }) %></tbody>
+</table></div><% } %>
+</div>
+<p class="small muted">Before comparing branches, remember they differ in market (Wayanad vs Calicut), size and staff. Branch context figures are not yet recorded.</p>
+<%- include('../partials/footer') %>
