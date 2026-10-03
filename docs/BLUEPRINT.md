@@ -180,3 +180,51 @@ user. CI runs both on every pull request.
 
 Next iteration (after §9 answers): replace placeholders, import a real data
 sample, run the data-quality pass on it, and pilot at one branch.
+
+## 11. Bulk and purchased data (proposed, not built)
+
+Asked by Head Office on 2026-10-03: how should a purchased or collected bulk
+list (a vendor's database, event or exhibition sign-ups, a society or office
+list) be handled?
+
+**Today:** the CSV import turns every row into a lead. For a cold list that is
+wrong. It starts the first-contact SLA on thousands of leads at once and fills
+the action lists with overdue items. The rows enter the conversion denominator,
+so branch and staff conversion fall for no real reason. Lead Rescue would also
+spend the AI budget on names that never asked to hear from us. **Do not import
+bulk lists as leads until the design below exists.**
+
+**Proposed rule:** bulk data is a **prospect**, not a lead. A prospect becomes a
+lead only when a contact shows interest. That keeps "leads ≠ volume" and
+"activity ≠ productivity" true.
+
+| Step | What happens | Data |
+|---|---|---|
+| 1. Register the list | Each upload is one batch: vendor or collection point, date, cost, row count, how the data was collected, consent basis, expiry | `prospect_list` (campaign-linked, so cost flows into marketing ROI) |
+| 2. Clean on import | Mobiles normalised and validated with the company's phone rule; duplicates inside the file removed; matches to existing customers and open leads flagged and **not** re-called cold; numbers on the company's do-not-contact list dropped | `prospect` rows with a clean status: valid, invalid, duplicate, existing customer, open lead, blocked |
+| 3. Calling queue | Head Office or the branch manager assigns a slice to telecallers. Each call gets an outcome: interested, call back, not interested, wrong number, do not contact | `prospect_attempt`; "do not contact" goes to a company-wide block list |
+| 4. Convert | "Interested" creates a normal lead with the list's campaign and source "Bulk list". From here the SLA, stages, follow-ups and agents apply as usual | Lead keeps `prospect_id` |
+| 5. Measure the list | Per batch: valid %, reachable %, interested %, leads won, revenue, cost per interested prospect, cost per sale | `v_prospect_list_performance` |
+
+How this fits the existing design:
+- **KPIs stay honest.** Prospects never count as leads. Conversion is measured
+  from the moment a prospect becomes a lead, and list quality is reported separately.
+- **Agents stay off cold data.** Lead Rescue and the Follow-up Writer act only
+  on leads; a prospect gets no AI action until it converts.
+- **Existing customers are protected.** A bought list cannot create a second
+  record or cold-call someone already in a sales conversation.
+- **Same security.** Company isolation and branch scope apply to lists and
+  prospects as they do to leads.
+
+**Risk to confirm (not legal advice):** contacting purchased numbers in India
+raises questions under the Digital Personal Data Protection Act, 2023 (consent,
+purpose, deletion on request) and TRAI's commercial-communication / DND rules for
+calls and messages. The design stores the consent basis and expiry per batch,
+keeps a do-not-contact list, and can purge a batch. Whether a given list may be
+used at all is for Head Office and its advisor to decide.
+
+Needed from Head Office before building:
+- Which kinds of bulk data are used today (bought, events, walk-in registers, partner lists) and roughly how many rows a month.
+- Who works the lists: dedicated telecallers or branch staff, and per branch or central.
+- Whether a DND scrub is done today (by the vendor, a service, or not at all).
+- How long a list may be kept before it is purged.

@@ -122,3 +122,4 @@ and token prices are environment settings (see README).
 6. Target measures in use, and incentive rules.
 7. AI: switch on for the pilot? Monthly budget? May Lead Rescue schedule follow-ups itself, or only suggest? Languages for customer messages.
 8. Who should be the first Head Office admin login.
+9. Bulk and purchased data: the questions in BLUEPRINT §11.
